@@ -3,229 +3,209 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Life RPG: The Bridge</title>
+    <title>Life RPG: Personal Best</title>
     
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;600;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <style>
         :root {
-            --bg: #030303;
-            --card: #121214;
-            --primary: #4f46e5;
-            --secondary: #06b6d4;
-            --amharic: #fbbf24;
-            --text: #f8fafc;
-            --text-dim: #94a3b8;
+            --bg: #fdfdfd;
+            --primary: #007aff;
+            --text-main: #000;
+            --text-muted: #94a3b8;
+            --blue-mesh: radial-gradient(circle at 70% 20%, #7000ff 0%, transparent 50%),
+                        radial-gradient(circle at 20% 80%, #00d2ff 0%, #0055ff 100%);
+            --record-gold: #fbbf24;
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body {
-            font-family: 'Rubik', sans-serif;
-            background: var(--bg); color: var(--text);
-            margin: 0; padding: 0; height: 100vh; overflow: hidden;
-            background-image: radial-gradient(circle at 50% 10%, #1e1b4b 0%, #030303 80%);
-        }
+        body { font-family: 'Rubik', sans-serif; background: var(--bg); color: var(--text-main); margin: 0; padding: 0; height: 100vh; overflow: hidden; }
 
         .app-shell { height: 100vh; display: flex; flex-direction: column; }
+        header { padding: 50px 25px 10px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .main-title { font-size: 2rem; font-weight: 900; margin: 0; }
         
-        header { padding: 50px 25px 15px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .header-top { display: flex; justify-content: space-between; align-items: flex-end; }
-        .app-title { font-size: 1.6rem; font-weight: 900; background: linear-gradient(to left, #fff, var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-
-        main { flex: 1; overflow-y: auto; padding: 20px; }
-
-        /* --- Amharic Study Card --- */
-        .study-card {
-            background: var(--card);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 30px;
-            padding: 25px; margin-bottom: 25px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-            animation: slideIn 0.5s ease-out;
+        /* Record Badge */
+        .record-badge { 
+            background: rgba(251, 191, 36, 0.1); border: 1px solid var(--record-gold);
+            color: var(--record-gold); padding: 4px 10px; border-radius: 50px;
+            font-size: 0.7rem; font-weight: 900; display: flex; align-items: center; gap: 4px;
         }
 
-        @keyframes slideIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        main { flex: 1; overflow-y: auto; padding: 0 20px 100px; }
+        main::-webkit-scrollbar { display: none; }
 
-        .category-label { font-size: 0.7rem; font-weight: 800; color: var(--secondary); text-transform: uppercase; letter-spacing: 2px; }
-        
-        .word-section { text-align: center; margin: 20px 0; }
-        .am-big { font-size: 2.8rem; font-weight: 900; color: var(--amharic); display: block; line-height: 1; }
-        .he-trans { font-size: 1.2rem; color: var(--text-dim); margin: 10px 0; }
-        .mean-box { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 20px; font-size: 1.5rem; font-weight: 700; color: #fff; border: 1px solid rgba(255,255,255,0.05); }
+        /* Stats Card */
+        .stats-card { background: #fff; border-radius: 30px; padding: 20px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.03); border: 1px solid #f1f1f1; }
+        .chart-container { display: flex; justify-content: space-between; align-items: flex-end; height: 60px; margin-top: 15px; }
+        .bar-bg { background: #f8fafc; width: 10%; height: 100%; border-radius: 8px; position: relative; overflow: hidden; }
+        .bar-fill { position: absolute; bottom: 0; width: 100%; background: #000; transition: height 0.6s ease; }
 
-        /* --- Quiz Grid --- */
-        .quiz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 25px; }
-        .quiz-opt {
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-            color: white; padding: 18px; border-radius: 20px; font-weight: 600; cursor: pointer; transition: 0.2s;
-        }
-        .quiz-opt:active { background: var(--primary); }
+        /* Amharic Mesh Card */
+        .mesh-card { border-radius: 30px; padding: 24px; margin-bottom: 20px; color: white; background: var(--blue-mesh); position: relative; overflow: hidden; box-shadow: 0 10px 30px rgba(0,122,255,0.2); }
+        .card-label { font-size: 0.8rem; font-weight: 700; opacity: 0.8; text-transform: uppercase; letter-spacing: 1px; }
+        .am-word { font-size: 2.6rem; font-weight: 900; display: block; text-align: center; margin: 15px 0; }
+        .reveal-box { background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); padding: 12px; border-radius: 18px; text-align: center; font-weight: 700; transition: 0.3s; }
+        .reveal-box.hidden { filter: blur(10px); opacity: 0.5; }
 
-        /* --- Task System --- */
-        .task-list-title { font-size: 0.85rem; color: var(--text-dim); margin: 10px 5px; font-weight: 600; }
-        .task-card {
-            background: rgba(255,255,255,0.02); padding: 18px; border-radius: 22px;
-            display: flex; align-items: center; gap: 15px; margin-bottom: 12px;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-        .task-card.done { opacity: 0.4; border-color: var(--secondary); }
-        .check-circle { width: 22px; height: 22px; border: 2px solid #333; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-        .done .check-circle { background: var(--secondary); border-color: var(--secondary); }
+        /* Quiz */
+        .quiz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .quiz-btn { background: #fff; border: none; padding: 12px; border-radius: 15px; font-weight: 700; font-size: 0.85rem; color: #000; }
 
-        /* --- Navigation --- */
-        .nav-bar {
-            position: fixed; bottom: 0; width: 100%; height: 85px;
-            background: rgba(10, 10, 12, 0.95); backdrop-filter: blur(20px);
-            border-top: 1px solid rgba(255,255,255,0.05);
-            display: flex; justify-content: space-around; align-items: center;
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-        .nav-item { color: #4b5563; background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 700; }
-        .nav-item.active { color: var(--primary); }
+        /* Habits */
+        .task-row { background: #fff; border-radius: 20px; padding: 16px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; border: 1px solid #f1f1f1; }
+        .task-row.done { opacity: 0.4; }
+        .check-circle { width: 22px; height: 22px; border: 2px solid #e5e7eb; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; }
+        .done .check-circle { background: #000; border-color: #000; color: #fff; }
 
-        .add-btn { position: fixed; bottom: 100px; left: 25px; width: 56px; height: 56px; border-radius: 18px; background: var(--primary); border: none; color: white; box-shadow: 0 10px 20px rgba(79, 70, 229, 0.4); }
-
+        /* Navigation */
+        .nav { position: fixed; bottom: 0; width: 100%; height: 80px; background: rgba(255,255,255,0.9); backdrop-filter: blur(20px); border-top: 1px solid #f1f1f1; display: flex; justify-content: space-around; align-items: center; }
+        .nav-btn { color: #d1d5db; background: none; border: none; padding: 10px; }
+        .nav-btn.active { color: #000; }
+        .fab { position: fixed; bottom: 95px; left: 20px; width: 56px; height: 56px; border-radius: 50%; background: #000; color: #fff; border: none; box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
 
     <div class="app-shell">
         <header>
-            <div class="header-top">
-                <h1 class="app-title">THE BRIDGE</h1>
-                <div id="levelDisplay" style="font-size: 0.8rem; font-weight: 800; color: var(--secondary);">LEVEL 1</div>
+            <div>
+                <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">המסע של היום</div>
+                <h1 class="main-title">הצייד</h1>
             </div>
-            <div style="height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin-top: 10px; overflow: hidden;">
-                <div id="xpBar" style="width: 0%; height: 100%; background: var(--primary); transition: 0.8s;"></div>
+            <div id="recordDisplay" class="record-badge" style="display: none;">
+                <i data-lucide="trophy" style="width: 12px; height: 12px;"></i>
+                שיא חדש!
             </div>
         </header>
 
         <main id="mainView">
-            <div class="study-card">
-                <span id="catLabel" class="category-label">טוען...</span>
-                <div class="word-section">
-                    <span id="amWord" class="am-big">...</span>
-                    <p id="heTrans" class="he-trans">...</p>
-                    <div id="meanBox" class="mean-box">...</div>
+            <div class="stats-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 900; font-size: 0.9rem;">עקומת שיפור</span>
+                    <span id="bestEver" style="font-size: 0.7rem; font-weight: 700; color: var(--record-gold);">שיא: 0 XP</span>
                 </div>
-                <div id="quizArea" class="quiz-grid"></div>
+                <div class="chart-container" id="chart"></div>
             </div>
 
-            <div class="task-list-title">משימות עזרה ותקשורת</div>
-            <div id="taskList"></div>
+            <div class="mesh-card">
+                <span class="card-label">למידה יומית</span>
+                <span class="am-word" id="am">...</span>
+                <div id="reveal" class="reveal-box hidden">???</div>
+                <div class="quiz-grid" id="quiz"></div>
+            </div>
+
+            <div style="margin: 20px 5px 10px; font-weight: 900; font-size: 1.2rem;">הרגלים</div>
+            <div id="habitList"></div>
         </main>
 
-        <nav class="nav-bar">
-            <button class="nav-item active" onclick="location.reload()"><i data-lucide="home"></i><span>ראשי</span></button>
-            <button class="nav-item" onclick="alert('300 המילים מהחוברת יפתחו עם ההתקדמות שלך!')"><i data-lucide="book-marked"></i><span>המילון שלי</span></button>
+        <nav class="nav">
+            <button class="nav-btn active" onclick="location.reload()"><i data-lucide="zap"></i></button>
+            <button class="nav-btn" onclick="alert('הספריה בבניה')"><i data-lucide="library"></i></button>
         </nav>
     </div>
 
-    <button class="add-btn" onclick="addNewTask()"><i data-lucide="plus"></i></button>
+    <button class="fab" onclick="addH()"><i data-lucide="plus"></i></button>
 
     <script>
-        // --- מאגר מילים משולב: חוברת + צרכים פרקטיים ---
-        const dictionary = [
-            // מילים מהחוברת (בסיס הבית)
-            { am: "Bet", he: "בֵּת", mean: "בית", cat: "סביבה" },
-            { am: "Terepeza", he: "טֶרֶפֶּזָה", mean: "שולחן", cat: "חפצים מהחוברת" },
-            { am: "Alga", he: "אַלְגָה", mean: "מיטה", cat: "חפצים מהחוברת" },
-            { am: "Dabbo", he: "דָאבּוֹ", mean: "לחם", cat: "אוכל" },
-            { am: "Sini", he: "סִינִי", mean: "כוס / ספל", cat: "חפצים מהחוברת" },
-            
-            // מילים פרקטיות (חשבונות וטכנולוגיה)
-            { am: "Hisab", he: "הִיסָאבּ", mean: "חשבון (מים/חשמל)", cat: "ניהול יום-יומי" },
-            { am: "Mekfel", he: "מֶקְפֶל", mean: "לשלם / תשלום", cat: "ניהול יום-יומי" },
-            { am: "Mebrat", he: "מֶבְּרָאת", mean: "חשמל / אור", cat: "ניהול יום-יומי" },
-            { am: "Wiha", he: "וִוי-הָא", mean: "מים", cat: "ניהול יום-יומי" },
-            { am: "Silk", he: "סִילְק", mean: "טלפון", cat: "טכנולוגיה" },
-            { am: "Mel'ikt", he: "מֶלְ-אִיקְט", mean: "הודעה (WhatsApp)", cat: "טכנולוגיה" },
-            { am: "Zena", he: "זֶנָא", mean: "חדשות / דיווח", cat: "תקשורת" },
-            
-            // פעולות יומיומיות
-            { am: "Mesmat", he: "מֶסְמָאת", mean: "לשמוע / להקשיב", cat: "תקשורת" },
-            { am: "Mennager", he: "מֶנָאגֶר", mean: "לדבר", cat: "תקשורת" },
-            { am: "Meredat", he: "מֶרֶדָאת", mean: "להבין / הבנה", cat: "תקשורת" },
-            { am: "Erezo", he: "אֶרֶזוֹ", mean: "עזרה / לעזור", cat: "פעולה" }
+        const dict = [
+            { am: "Bet", mean: "בית" }, { am: "Terepeza", mean: "שולחן" }, 
+            { am: "Alga", mean: "מיטה" }, { am: "Hisab", mean: "חשבון" }, 
+            { am: "Mekfel", mean: "לשלם" }
         ];
 
-        let state = JSON.parse(localStorage.getItem('bridge_rpg_v1')) || {
-            xp: 0,
-            wordIdx: 0,
-            tasks: [
-                { id: 1, txt: "להסביר להורים על הודעה בטלפון", done: false },
-                { id: 2, txt: "לבדוק אם הגיע מכתב מהבנק/דואר", done: false }
-            ]
+        let state = JSON.parse(localStorage.getItem('arch_record_v1')) || {
+            xp: 0, wordIdx: 0,
+            habits: [{id:1, txt:"מקלחת קרה", done:false}, {id:2, txt:"סידור מיטה", done:false}],
+            history: {},
+            bestDayXp: 0
         };
 
         function save() {
-            localStorage.setItem('bridge_rpg_v1', JSON.stringify(state));
+            const today = new Date().toISOString().split('T')[0];
+            const currentDayXp = (state.habits.filter(h=>h.done).length * 20) + (state.wordIdx * 50);
+            
+            // בדיקת שיא
+            if(currentDayXp > state.bestDayXp) {
+                if(state.bestDayXp > 0) {
+                    confetti({ particleCount: 150, spread: 70, colors: ['#fbbf24', '#ffffff'] });
+                    document.getElementById('recordDisplay').style.display = 'flex';
+                }
+                state.bestDayXp = currentDayXp;
+            }
+
+            state.history[today] = currentDayXp;
+            localStorage.setItem('arch_record_v1', JSON.stringify(state));
             render();
         }
 
         function render() {
-            // Header Stats
-            const level = Math.floor(state.xp / 100) + 1;
-            document.getElementById('levelDisplay').innerText = `LEVEL ${level}`;
-            document.getElementById('xpBar').style.width = (state.xp % 100) + '%';
+            // Stats
+            document.getElementById('bestEver').innerText = `שיא: ${state.bestDayXp} XP`;
+            renderChart();
 
-            // Word Card
-            const word = dictionary[state.wordIdx % dictionary.length];
-            document.getElementById('catLabel').innerText = word.cat;
-            document.getElementById('amWord').innerText = word.am;
-            document.getElementById('heTrans').innerText = word.he;
-            document.getElementById('meanBox').innerText = word.mean;
+            // Word
+            const w = dict[state.wordIdx % dict.length];
+            document.getElementById('am').innerText = w.am;
+            const rev = document.getElementById('reveal');
+            rev.innerText = "???"; rev.classList.add('hidden');
 
-            // Quiz Area
-            const quizArea = document.getElementById('quizArea');
-            const distractor = dictionary[(state.wordIdx + 1) % dictionary.length];
-            const options = [word.mean, distractor.mean].sort(() => Math.random() - 0.5);
-            
-            quizArea.innerHTML = options.map(opt => `
-                <button class="quiz-opt" onclick="checkAnswer('${opt}', '${word.mean}')">${opt}</button>
-            `).join('');
+            const q = document.getElementById('quiz');
+            const dist = dict[(state.wordIdx+1)%dict.length];
+            const opts = [w.mean, dist.mean].sort(()=>Math.random()-0.5);
+            q.innerHTML = opts.map(o => `<button class="quiz-btn" onclick="check('${o}','${w.mean}')">${o}</button>`).join('');
 
-            // Task List
-            const taskList = document.getElementById('taskList');
-            taskList.innerHTML = state.tasks.map(t => `
-                <div class="task-card ${t.done ? 'done' : ''}" onclick="toggleTask(${t.id})">
-                    <div class="check-circle">${t.done ? '<i data-lucide="check" style="width:12px; color:white"></i>' : ''}</div>
-                    <span style="font-weight:600; font-size:0.9rem;">${t.txt}</span>
+            // Habits
+            document.getElementById('habitList').innerHTML = state.habits.map(h => `
+                <div class="task-row ${h.done?'done':''}" onclick="toggleH(${h.id})">
+                    <span style="font-weight:700;">${h.txt}</span>
+                    <div class="check-circle">${h.done?'✓':''}</div>
                 </div>
             `).join('');
-
             lucide.createIcons();
         }
 
-        function checkAnswer(chosen, correct) {
-            if(chosen === correct) {
-                confetti({ particleCount: 100, spread: 70, origin: { y: 0.8 } });
-                state.xp += 50;
-                state.wordIdx++; // עוברים למילה הבאה רק אחרי הצלחה
-                save();
-            } else {
-                alert("לא מדויק. המילה תחזור שוב כדי שתזכור את המשמעות.");
+        function renderChart() {
+            const chart = document.getElementById('chart');
+            const days = ['א','ב','ג','ד','ה','ו','ש'];
+            const todayIdx = new Date().getDay();
+            let html = '';
+            for(let i=0; i<7; i++) {
+                const date = new Date();
+                date.setDate(date.getDate() - (todayIdx - i));
+                const dateStr = date.toISOString().split('T')[0];
+                const val = state.history[dateStr] || 0;
+                const height = Math.min((val / (state.bestDayXp || 100)) * 100, 100);
+                html += `
+                    <div class="bar-bg">
+                        <div class="bar-fill" style="height: ${height}%"></div>
+                    </div>
+                `;
             }
+            chart.innerHTML = html;
         }
 
-        function toggleTask(id) {
-            const task = state.tasks.find(t => t.id === id);
-            task.done = !task.done;
-            if(task.done) {
-                state.xp += 30;
-                confetti({ particleCount: 40, origin: { y: 0.9 } });
-            }
+        function check(chosen, correct) {
+            if(chosen===correct) {
+                document.getElementById('reveal').innerText = correct;
+                document.getElementById('reveal').classList.remove('hidden');
+                confetti({particleCount:80, origin:{y:0.7}});
+                state.xp += 50;
+                setTimeout(() => { state.wordIdx++; save(); }, 1800);
+            } else { alert("נסה שוב!"); }
+        }
+
+        function toggleH(id) {
+            const h = state.habits.find(x => x.id===id);
+            h.done = !h.done;
             save();
         }
 
-        function addNewTask() {
-            const val = prompt("משימה חדשה (למשל: להסביר לאמא על המבצעים בסופר):");
-            if(val) {
-                state.tasks.push({ id: Date.now(), txt: val, done: false });
-                save();
-            }
+        function addH() {
+            const t = prompt("הרגל חדש:");
+            if(t) { state.habits.push({id:Date.now(), txt:t, done:false}); save(); }
         }
 
         render();
