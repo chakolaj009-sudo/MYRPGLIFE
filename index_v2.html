@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Life RPG: The Bridge</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;600;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        :root {
+            --bg: #030303;
+            --card: #121214;
+            --primary: #4f46e5;
+            --secondary: #06b6d4;
+            --amharic: #fbbf24;
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: 'Rubik', sans-serif;
+            background: var(--bg); color: var(--text);
+            margin: 0; padding: 0; height: 100vh; overflow: hidden;
+            background-image: radial-gradient(circle at 50% 10%, #1e1b4b 0%, #030303 80%);
+        }
+
+        .app-shell { height: 100vh; display: flex; flex-direction: column; }
+        
+        header { padding: 50px 25px 15px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .header-top { display: flex; justify-content: space-between; align-items: flex-end; }
+        .app-title { font-size: 1.6rem; font-weight: 900; background: linear-gradient(to left, #fff, var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        main { flex: 1; overflow-y: auto; padding: 20px; }
+
+        /* --- Amharic Study Card --- */
+        .study-card {
+            background: var(--card);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 30px;
+            padding: 25px; margin-bottom: 25px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+
+        .category-label { font-size: 0.7rem; font-weight: 800; color: var(--secondary); text-transform: uppercase; letter-spacing: 2px; }
+        
+        .word-section { text-align: center; margin: 20px 0; }
+        .am-big { font-size: 2.8rem; font-weight: 900; color: var(--amharic); display: block; line-height: 1; }
+        .he-trans { font-size: 1.2rem; color: var(--text-dim); margin: 10px 0; }
+        .mean-box { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 20px; font-size: 1.5rem; font-weight: 700; color: #fff; border: 1px solid rgba(255,255,255,0.05); }
+
+        /* --- Quiz Grid --- */
+        .quiz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 25px; }
+        .quiz-opt {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            color: white; padding: 18px; border-radius: 20px; font-weight: 600; cursor: pointer; transition: 0.2s;
+        }
+        .quiz-opt:active { background: var(--primary); }
+
+        /* --- Task System --- */
+        .task-list-title { font-size: 0.85rem; color: var(--text-dim); margin: 10px 5px; font-weight: 600; }
+        .task-card {
+            background: rgba(255,255,255,0.02); padding: 18px; border-radius: 22px;
+            display: flex; align-items: center; gap: 15px; margin-bottom: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .task-card.done { opacity: 0.4; border-color: var(--secondary); }
+        .check-circle { width: 22px; height: 22px; border: 2px solid #333; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .done .check-circle { background: var(--secondary); border-color: var(--secondary); }
+
+        /* --- Navigation --- */
+        .nav-bar {
+            position: fixed; bottom: 0; width: 100%; height: 85px;
+            background: rgba(10, 10, 12, 0.95); backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.05);
+            display: flex; justify-content: space-around; align-items: center;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .nav-item { color: #4b5563; background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 700; }
+        .nav-item.active { color: var(--primary); }
+
+        .add-btn { position: fixed; bottom: 100px; left: 25px; width: 56px; height: 56px; border-radius: 18px; background: var(--primary); border: none; color: white; box-shadow: 0 10px 20px rgba(79, 70, 229, 0.4); }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-shell">
+        <header>
+            <div class="header-top">
+                <h1 class="app-title">THE BRIDGE</h1>
+                <div id="levelDisplay" style="font-size: 0.8rem; font-weight: 800; color: var(--secondary);">LEVEL 1</div>
+            </div>
+            <div style="height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin-top: 10px; overflow: hidden;">
+                <div id="xpBar" style="width: 0%; height: 100%; background: var(--primary); transition: 0.8s;"></div>
+            </div>
+        </header>
+
+        <main id="mainView">
+            <div class="study-card">
+                <span id="catLabel" class="category-label">טוען...</span>
+                <div class="word-section">
+                    <span id="amWord" class="am-big">...</span>
+                    <p id="heTrans" class="he-trans">...</p>
+                    <div id="meanBox" class="mean-box">...</div>
+                </div>
+                <div id="quizArea" class="quiz-grid"></div>
+            </div>
+
+            <div class="task-list-title">משימות עזרה ותקשורת</div>
+            <div id="taskList"></div>
+        </main>
+
+        <nav class="nav-bar">
+            <button class="nav-item active" onclick="location.reload()"><i data-lucide="home"></i><span>ראשי</span></button>
+            <button class="nav-item" onclick="alert('300 המילים מהחוברת יפתחו עם ההתקדמות שלך!')"><i data-lucide="book-marked"></i><span>המילון שלי</span></button>
+        </nav>
+    </div>
+
+    <button class="add-btn" onclick="addNewTask()"><i data-lucide="plus"></i></button>
+
+    <script>
+        // --- מאגר מילים משולב: חוברת + צרכים פרקטיים ---
+        const dictionary = [
+            // מילים מהחוברת (בסיס הבית)
+            { am: "Bet", he: "בֵּת", mean: "בית", cat: "סביבה" },
+            { am: "Terepeza", he: "טֶרֶפֶּזָה", mean: "שולחן", cat: "חפצים מהחוברת" },
+            { am: "Alga", he: "אַלְגָה", mean: "מיטה", cat: "חפצים מהחוברת" },
+            { am: "Dabbo", he: "דָאבּוֹ", mean: "לחם", cat: "אוכל" },
+            { am: "Sini", he: "סִינִי", mean: "כוס / ספל", cat: "חפצים מהחוברת" },
+            
+            // מילים פרקטיות (חשבונות וטכנולוגיה)
+            { am: "Hisab", he: "הִיסָאבּ", mean: "חשבון (מים/חשמל)", cat: "ניהול יום-יומי" },
+            { am: "Mekfel", he: "מֶקְפֶל", mean: "לשלם / תשלום", cat: "ניהול יום-יומי" },
+            { am: "Mebrat", he: "מֶבְּרָאת", mean: "חשמל / אור", cat: "ניהול יום-יומי" },
+            { am: "Wiha", he: "וִוי-הָא", mean: "מים", cat: "ניהול יום-יומי" },
+            { am: "Silk", he: "סִילְק", mean: "טלפון", cat: "טכנולוגיה" },
+            { am: "Mel'ikt", he: "מֶלְ-אִיקְט", mean: "הודעה (WhatsApp)", cat: "טכנולוגיה" },
+            { am: "Zena", he: "זֶנָא", mean: "חדשות / דיווח", cat: "תקשורת" },
+            
+            // פעולות יומיומיות
+            { am: "Mesmat", he: "מֶסְמָאת", mean: "לשמוע / להקשיב", cat: "תקשורת" },
+            { am: "Mennager", he: "מֶנָאגֶר", mean: "לדבר", cat: "תקשורת" },
+            { am: "Meredat", he: "מֶרֶדָאת", mean: "להבין / הבנה", cat: "תקשורת" },
+            { am: "Erezo", he: "אֶרֶזוֹ", mean: "עזרה / לעזור", cat: "פעולה" }
+        ];
+
+        let state = JSON.parse(localStorage.getItem('bridge_rpg_v1')) || {
+            xp: 0,
+            wordIdx: 0,
+            tasks: [
+                { id: 1, txt: "להסביר להורים על הודעה בטלפון", done: false },
+                { id: 2, txt: "לבדוק אם הגיע מכתב מהבנק/דואר", done: false }
+            ]
+        };
+
+        function save() {
+            localStorage.setItem('bridge_rpg_v1', JSON.stringify(state));
+            render();
+        }
+
+        function render() {
+            // Header Stats
+            const level = Math.floor(state.xp / 100) + 1;
+            document.getElementById('levelDisplay').innerText = `LEVEL ${level}`;
+            document.getElementById('xpBar').style.width = (state.xp % 100) + '%';
+
+            // Word Card
+            const word = dictionary[state.wordIdx % dictionary.length];
+            document.getElementById('catLabel').innerText = word.cat;
+            document.getElementById('amWord').innerText = word.am;
+            document.getElementById('heTrans').innerText = word.he;
+            document.getElementById('meanBox').innerText = word.mean;
+
+            // Quiz Area
+            const quizArea = document.getElementById('quizArea');
+            const distractor = dictionary[(state.wordIdx + 1) % dictionary.length];
+            const options = [word.mean, distractor.mean].sort(() => Math.random() - 0.5);
+            
+            quizArea.innerHTML = options.map(opt => `
+                <button class="quiz-opt" onclick="checkAnswer('${opt}', '${word.mean}')">${opt}</button>
+            `).join('');
+
+            // Task List
+            const taskList = document.getElementById('taskList');
+            taskList.innerHTML = state.tasks.map(t => `
+                <div class="task-card ${t.done ? 'done' : ''}" onclick="toggleTask(${t.id})">
+                    <div class="check-circle">${t.done ? '<i data-lucide="check" style="width:12px; color:white"></i>' : ''}</div>
+                    <span style="font-weight:600; font-size:0.9rem;">${t.txt}</span>
+                </div>
+            `).join('');
+
+            lucide.createIcons();
+        }
+
+        function checkAnswer(chosen, correct) {
+            if(chosen === correct) {
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.8 } });
+                state.xp += 50;
+                state.wordIdx++; // עוברים למילה הבאה רק אחרי הצלחה
+                save();
+            } else {
+                alert("לא מדויק. המילה תחזור שוב כדי שתזכור את המשמעות.");
+            }
+        }
+
+        function toggleTask(id) {
+            const task = state.tasks.find(t => t.id === id);
+            task.done = !task.done;
+            if(task.done) {
+                state.xp += 30;
+                confetti({ particleCount: 40, origin: { y: 0.9 } });
+            }
+            save();
+        }
+
+        function addNewTask() {
+            const val = prompt("משימה חדשה (למשל: להסביר לאמא על המבצעים בסופר):");
+            if(val) {
+                state.tasks.push({ id: Date.now(), txt: val, done: false });
+                save();
+            }
+        }
+
+        render();
+    </script>
+</body>
+</html>
