@@ -1,0 +1,213 @@
+@import 'tailwindcss';
+
+:root {
+  --bg: #f7f3ec;
+  --card: #fffdf9;
+  --ink: #2f3a34;
+  --muted: #7b867f;
+  --line: #ebe4d8;
+  --leaf: #4fae7c;
+  --leaf-soft: #e2f2e8;
+  --sun: #f2b53d;
+  --sun-deep: #e39a1c;
+  --sun-soft: #fdf0d3;
+  --sky: #6fb3de;
+  --sky-soft: #e3f1fa;
+  --peach: #ef9a7c;
+  --peach-soft: #fce7de;
+  --shadow: 0 1px 2px rgb(60 50 30 / 0.04), 0 6px 20px rgb(60 50 30 / 0.06);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151e19;
+    --card: #1d2822;
+    --ink: #eef3ee;
+    --muted: #98a69e;
+    --line: #2b3830;
+    --leaf: #6cc996;
+    --leaf-soft: #213629;
+    --sun: #f5c25a;
+    --sun-deep: #f0a93a;
+    --sun-soft: #383121;
+    --sky: #84c3ea;
+    --sky-soft: #1c3140;
+    --peach: #f2a78c;
+    --peach-soft: #3b2922;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.25), 0 6px 20px rgb(0 0 0 / 0.2);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --font-sans: 'Rubik', ui-rounded, system-ui, -apple-system, sans-serif;
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-leaf: var(--leaf);
+  --color-leaf-soft: var(--leaf-soft);
+  --color-sun: var(--sun);
+  --color-sun-deep: var(--sun-deep);
+  --color-sun-soft: var(--sun-soft);
+  --color-sky: var(--sky);
+  --color-sky-soft: var(--sky-soft);
+  --color-peach: var(--peach);
+  --color-peach-soft: var(--peach-soft);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+}
+
+button {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.card {
+  background: var(--card);
+  border-radius: 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+.safe-top {
+  padding-top: max(env(safe-area-inset-top), 12px);
+}
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 16px);
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--leaf);
+  outline-offset: 2px;
+}
+
+/* ---------- motion ---------- */
+
+@keyframes pop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* A completed task: check pops, row slides away, height collapses. */
+.task-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 260ms ease 380ms, margin 260ms ease 380ms;
+}
+.task-wrap > * { min-height: 0; }
+.task-wrap.leaving > * { overflow: hidden; }
+.task-wrap.leaving { grid-template-rows: 0fr; margin-bottom: 0 !important; }
+.task-wrap.leaving .task-row {
+  opacity: 0;
+  transform: translateX(var(--leave-x, 40px)) scale(0.97);
+  transition: opacity 280ms ease 160ms, transform 320ms cubic-bezier(0.4, 0, 0.6, 1) 160ms;
+}
+[dir='rtl'] .task-wrap { --leave-x: -40px; }
+.task-wrap.leaving .check-dot { animation: pop 260ms ease-out; }
+.task-wrap.entering .task-row { animation: rise-in 280ms ease-out; }
+
+.rise-in { animation: rise-in 360ms ease-out both; }
+
+@keyframes bar-glow {
+  0% { box-shadow: 0 0 0 0 rgb(242 181 61 / 0.55); }
+  100% { box-shadow: 0 0 0 8px rgb(242 181 61 / 0); }
+}
+.bar-glow { animation: bar-glow 600ms ease-out; }
+
+@keyframes breathe {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  50% { transform: translateY(-1.5px) scale(1.012, 0.99); }
+}
+@keyframes blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  97% { transform: scaleY(0.1); }
+}
+@keyframes boing {
+  0% { transform: translateY(0) scale(1, 1); }
+  18% { transform: translateY(0) scale(1.15, 0.82); }
+  45% { transform: translateY(-34px) scale(0.9, 1.12); }
+  70% { transform: translateY(0) scale(1.12, 0.88); }
+  85% { transform: translateY(-5px) scale(0.98, 1.03); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-9deg); }
+  40% { transform: rotate(8deg); }
+  60% { transform: rotate(-6deg); }
+  80% { transform: rotate(4deg); }
+}
+@keyframes bubble {
+  0% { opacity: 0; transform: translate(-50%, 6px) scale(0.7); }
+  15% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
+}
+.buddy-idle { animation: breathe 3.6s ease-in-out infinite; transform-origin: 50% 100%; }
+.buddy-eye { animation: blink 4.8s infinite; transform-box: fill-box; transform-origin: center; }
+.buddy-boing { animation: boing 700ms cubic-bezier(0.3, 0.7, 0.4, 1); transform-origin: 50% 100%; }
+.buddy-wiggle { animation: wiggle 650ms ease-in-out; transform-origin: 50% 90%; }
+.bubble { animation: bubble 1400ms ease-out forwards; }
+
+@keyframes sparkle {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1); }
+}
+.sparkle { animation: sparkle 1100ms ease-out forwards; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-12px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.toast-in { animation: toast-in 280ms cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+.sheet-up { animation: sheet-up 280ms cubic-bezier(0.2, 0.8, 0.3, 1); }
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-in { animation: fade-in 200ms ease-out; }
+
+@keyframes grow-in {
+  from { transform: scale(0.7); opacity: 0.2; }
+  to { transform: none; opacity: 1; }
+}
+.grow-in { animation: grow-in 700ms cubic-bezier(0.2, 0.9, 0.3, 1.3); transform-origin: 50% 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+  .buddy-idle, .buddy-eye { animation: none !important; }
+}
