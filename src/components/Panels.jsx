@@ -1,258 +1,221 @@
 import { forwardRef, useEffect, useRef, useState } from 'react';
-import {
-  Check, ChevronDown, Flower2, Leaf, Link2, Mountain, Plus, Quote, Snowflake, Sprout, Star, Sunrise, TreeDeciduous, Trash2, X,
-} from 'lucide-react';
-import { weekDays, keyToLocalDate } from '../domain/dates.js';
-import { doneCount, isAllDone, MAX_TITLE } from '../domain/model.js';
+import { ChevronDown, Lock, Plus, ShieldCheck, Snowflake, Star, Trash2 } from 'lucide-react';
+import { weekDays, keyToLocalDate, dayNumber, weekStart } from '../domain/dates.js';
+import { doneCount, isAllDone, isActive, MAX_TITLE, STAGES } from '../domain/model.js';
 import { itemTitle } from '../lib/i18n.js';
+import { CompanionArt } from './Companion.jsx';
+import Plant from './Plant.jsx';
+import { Medal, MissionIcon, MISSION_ICONS, MISSION_TINT, Peak, iconKey } from './Art.jsx';
 
-// ---------------------------------------------------------------- XP meter
-export const XpMeter = forwardRef(function XpMeter({ t, level, glow }, fillRef) {
-  const target = Math.round((level.into / level.need) * 100);
-  const [pct, setPct] = useState(target);
-  const [instant, setInstant] = useState(false);
-  const prevLevel = useRef(level.level);
-  const track = useRef(null);
+export const WEEK_GOAL = 5;
 
-  // Level up: fill to the brim first, then start the new level from the left.
-  useEffect(() => {
-    if (level.level > prevLevel.current) {
-      setInstant(false);
-      setPct(100);
-      const a = setTimeout(() => {
-        setInstant(true);
-        setPct(0);
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          setInstant(false);
-          setPct(target);
-        }));
-      }, 520);
-      prevLevel.current = level.level;
-      return () => clearTimeout(a);
-    }
-    prevLevel.current = level.level;
-    setPct(target);
-  }, [level.level, target]);
-
-  useEffect(() => {
-    const el = track.current;
-    if (!glow || !el) return;
-    el.classList.remove('bar-glow');
-    void el.offsetWidth;
-    el.classList.add('bar-glow');
-  }, [glow]);
-
+// ---------------------------------------------------------------- Week journey
+export const WeekCard = forwardRef(function WeekCard({ t, state, today, locale, chainText, freezeAvailable }, ref) {
+  const days = weekDays(today);
+  const fmt = new Intl.DateTimeFormat(locale, { weekday: 'narrow' });
+  const full = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'short' });
+  const active = days.filter((k) => k <= today && isActive(state.days[k])).length;
+  const won = active >= WEEK_GOAL;
+  const dest = t(`dest.${Math.floor(dayNumber(weekStart(today)) / 7) % 5}`);
+  const statusOf = (k) => {
+    const d = state.days[k];
+    const n = doneCount(d);
+    if (isAllDone(d)) return { cls: 'done', label: t('week.legend.done') };
+    if (n) return { cls: 'some', p: `${(n / d.items.length) * 360}deg`, label: `${n}/${d.items.length}` };
+    if (d && d.frozen) return { cls: 'frozen', label: t('week.frozen') };
+    return { cls: k > today ? 'future' : '', label: '' };
+  };
+  const lit = (s) => s.cls === 'done' || s.cls === 'some' || s.cls === 'frozen';
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="shrink-0 rounded-full bg-sun-soft px-2.5 py-1 text-xs font-semibold text-sun-deep">{t('level', { n: level.level })}</span>
-      <div
-        ref={track}
-        className="relative h-3.5 flex-1 overflow-hidden rounded-full bg-line/70"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={level.need}
-        aria-valuenow={level.into}
-        aria-label={t('xp', { a: level.into, b: level.need })}
-      >
-        <div
-          ref={fillRef}
-          className={`h-full rounded-full ${instant ? '' : 'transition-[width] duration-500 ease-out'}`}
-          style={{ width: `${Math.max(pct, 3)}%`, background: 'linear-gradient(90deg, var(--sun), var(--sun-deep))' }}
-        />
+    <section ref={ref} className="card-lg px-4 pb-3.5 pt-3.5" aria-labelledby="week-h">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 id="week-h" className="eyebrow">
+            {t('week.title')}
+          </h2>
+          <p className="mt-1 text-[17px] font-extrabold tracking-[-0.02em]">
+            <span className="text-primary-deep">{active}</span> / 7 {t('week.days')}
+          </p>
+        </div>
+        <div className="flex max-w-[55%] items-center gap-1.5 text-end">
+          <span className="text-xs font-semibold leading-tight text-ink2">
+            {won ? t('week.reached', { place: dest }) : t('week.toGo', { n: WEEK_GOAL - active, place: dest })}
+          </span>
+          <Peak won={won} />
+        </div>
       </div>
-      <span dir="ltr" className="shrink-0 text-xs tabular-nums text-muted">{t('xp', { a: level.into, b: level.need })}</span>
-    </div>
+      <ol className="m-0 mt-3 flex list-none items-start p-0">
+        {days.map((k, i) => {
+          const s = statusOf(k);
+          const isToday = k === today;
+          return [
+            i > 0 && <li key={`l${k}`} aria-hidden="true" className={`link-line mt-[14px] ${lit(s) && lit(statusOf(days[i - 1])) ? 'on' : ''}`} />,
+            <li key={k} className="flex flex-col items-center gap-1" aria-label={`${full.format(keyToLocalDate(k))}${s.label ? ` · ${s.label}` : ''}`}>
+              <span className={`slot ${s.cls} ${isToday ? 'today' : ''}`} style={s.p ? { '--p': s.p } : undefined}>
+                {s.cls === 'done' ? <Star size={14} fill="currentColor" strokeWidth={0} /> : s.cls === 'frozen' ? <Snowflake size={15} /> : null}
+              </span>
+              <span className={`text-[10.5px] ${isToday ? 'font-bold text-primary-deep' : 'text-muted'}`}>{fmt.format(keyToLocalDate(k))}</span>
+            </li>,
+          ];
+        })}
+      </ol>
+      <div className="mt-2.5 flex items-center gap-2 border-t border-line pt-2.5 text-[12.5px] text-ink2">
+        <span className="min-w-0 flex-1" role="status">
+          {chainText}
+        </span>
+        <span className={`inline-flex shrink-0 items-center gap-1 text-[11.5px] font-semibold ${freezeAvailable ? 'text-green-deep' : 'text-muted'}`}>
+          <ShieldCheck size={14} />
+          {freezeAvailable ? t('freeze.ready') : t('freeze.used')}
+        </span>
+      </div>
+    </section>
   );
 });
 
 // ---------------------------------------------------------------- Quote
-export function QuoteCard({ text }) {
+export function QuoteCard({ t, text }) {
   return (
-    <figure className="flex gap-2.5 px-1 py-1 text-[15px] leading-relaxed text-muted">
-      <Quote size={16} className="mt-1 shrink-0 text-peach" aria-hidden="true" />
-      <blockquote className="italic">{text}</blockquote>
+    <figure className="card m-0 px-4 py-3.5">
+      <figcaption className="eyebrow mb-1">{t('quote.title')}</figcaption>
+      <blockquote className="m-0 text-[15px] leading-relaxed text-ink2">{text}</blockquote>
     </figure>
   );
 }
 
-// ---------------------------------------------------------------- Chain banner
-export function ChainBanner({ text, frozen }) {
+// ---------------------------------------------------------------- Done card
+export const DoneCard = forwardRef(function DoneCard({ t, praise, bonus, streak, species }, ref) {
   return (
-    <p
-      className={`flex items-center gap-2 rounded-2xl px-3.5 py-2.5 text-sm ${
-        frozen ? 'bg-sky-soft text-ink' : 'bg-leaf-soft text-ink'
-      }`}
-      role="status"
+    <div
+      ref={ref}
+      className="rise-in mb-3 flex items-center gap-3 overflow-hidden rounded-[22px] px-4 py-4 text-white shadow-[0_12px_30px_rgb(79_70_229/0.3)]"
+      style={{ background: 'linear-gradient(135deg,#8B93FF 0%,#6366F1 55%,#4F46E5 100%)' }}
     >
-      {frozen ? <Snowflake size={16} className="shrink-0 text-sky" /> : <Link2 size={16} className="shrink-0 text-leaf" />}
-      <span>{text}</span>
-    </p>
+      <div className="shrink-0">
+        <CompanionArt species={species} mood="calm" size={76} />
+      </div>
+      <div className="min-w-0">
+        <h3 className="text-[17px] font-extrabold tracking-[-0.01em]">{t('done.title')}</h3>
+        <p className="mt-0.5 text-[13.5px] leading-snug text-white/85">{praise}</p>
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[11.5px] font-bold">
+          <span className="rounded-full bg-white/20 px-2.5 py-1" dir="ltr">
+            {t('done.bonus', { xp: bonus })}
+          </span>
+          {streak > 0 && <span className="rounded-full bg-white/20 px-2.5 py-1">{t('done.chain', { n: streak })}</span>}
+        </div>
+      </div>
+    </div>
   );
-}
+});
 
-// ---------------------------------------------------------------- Week view
-export function WeekView({ t, state, today, locale }) {
-  const days = weekDays(today);
-  const fmt = new Intl.DateTimeFormat(locale, { weekday: 'narrow' });
-  const full = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'short' });
-  return (
-    <section className="card px-3 pb-3 pt-3.5" aria-labelledby="week-h">
-      <h2 id="week-h" className="mb-2.5 px-1 text-sm font-semibold">
-        {t('week.title')}
-      </h2>
-      <ol className="grid grid-cols-7 gap-1">
-        {days.map((k) => {
-          const d = state.days[k];
-          const n = doneCount(d);
-          const total = d ? d.items.length : 0;
-          const all = isAllDone(d);
-          const frozen = !!(d && d.frozen && n === 0);
-          const isToday = k === today;
-          const future = k > today;
-          const ratio = total ? n / total : 0;
-          let desc = '';
-          if (all) desc = t('week.legend.done');
-          else if (n) desc = `${n}/${total}`;
-          else if (frozen) desc = t('week.frozen');
-          return (
-            <li key={k} className="flex flex-col items-center gap-1.5" aria-label={`${full.format(keyToLocalDate(k))}${desc ? ` · ${desc}` : ''}`}>
-              <span className={`text-[11px] ${isToday ? 'font-semibold text-ink' : 'text-muted'}`}>{fmt.format(keyToLocalDate(k))}</span>
-              <span
-                className={`grid h-9 w-9 place-items-center rounded-full text-[11px] ${isToday ? 'ring-2 ring-ink/70 ring-offset-2 ring-offset-card' : ''} ${
-                  future ? 'opacity-40' : ''
-                }`}
-                style={
-                  all
-                    ? { background: 'var(--leaf)', color: '#fff' }
-                    : frozen
-                      ? { background: 'var(--sky-soft)', color: 'var(--sky)' }
-                      : n
-                        ? { background: `conic-gradient(var(--leaf) ${ratio * 360}deg, var(--leaf-soft) 0)` }
-                        : { background: 'var(--line)' }
-                }
-              >
-                {all ? <Check size={16} strokeWidth={3} /> : frozen ? <Snowflake size={15} /> : n ? <span className="h-5 w-5 rounded-full bg-card" /> : null}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------- Stats
-const ACH_ICONS = { sunrise: Sunrise, sprout: Sprout, flower: Flower2, tree: TreeDeciduous, mountain: Mountain, star: Star };
-
-export function StatsPanel({ t, st }) {
-  const [open, setOpen] = useState(false);
+// ---------------------------------------------------------------- Garden (stats, keepsakes, companions)
+export const GardenPanel = forwardRef(function GardenPanel({ t, st, open, setOpen }, ref) {
   const [picked, setPicked] = useState(null);
+  const stage = st.stage;
+  const next = stage.next;
+  const into = next ? (st.totalTasks - stage.min) / (next.min - stage.min) : 1;
   const tiles = [
     [t('stats.tasks'), st.totalTasks],
     [t('stats.days'), st.activeDays],
     [t('stats.current'), st.current],
     [t('stats.best'), st.bestStreak],
   ];
-  const unlocked = st.achievements.filter((a) => a.unlocked).length;
   return (
-    <section className="card overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-controls="stats-body"
-        className="flex min-h-14 w-full items-center gap-3 px-4 text-start"
-      >
-        <Leaf size={18} className="text-leaf" />
-        <span className="flex-1 text-sm font-semibold">{t('stats.title')}</span>
-        <span className="flex gap-1" aria-hidden="true">
-          {st.achievements.map((a) => {
-            const I = ACH_ICONS[a.icon];
-            return <I key={a.id} size={14} className={a.unlocked ? 'text-sun-deep' : 'text-line'} />;
-          })}
+    <section ref={ref} className="card-lg overflow-hidden">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex min-h-[60px] w-full items-center gap-3 px-4 text-start">
+        <span className="grid h-10 w-10 place-items-center rounded-[13px]" style={{ background: 'linear-gradient(180deg,#EAFBF1,#D3F4E1)' }}>
+          <Plant stage={stage.id} size={30} soil={false} />
         </span>
-        <span className="sr-only">
-          {unlocked}/{st.achievements.length}
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-bold">{t('stats.title')}</span>
+          <span className="block text-xs text-muted">
+            {t(`stage.${stage.id}`)} · {t('ach.count', { n: st.achievements.filter((a) => a.unlocked).length, total: st.achievements.length })}
+          </span>
         </span>
         <ChevronDown size={18} className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div id="stats-body" className="fade-in px-4 pb-4">
-          <dl className="grid grid-cols-2 gap-2">
+        <div className="fade-in px-4 pb-4">
+          <div className="flex items-center gap-3 rounded-[18px] px-3 py-2" style={{ background: 'linear-gradient(180deg,rgb(34 197 94 / 0.08),transparent)' }}>
+            <Plant stage={stage.id} size={86} label={t(`stage.${stage.id}`)} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-bold">{t(`stage.${stage.id}`)}</p>
+              <p className="text-xs text-ink2">{next ? t('stage.next', { n: next.min - st.totalTasks, stage: t(`stage.${next.id}`) }) : t('stage.max')}</p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
+                <div className="h-full rounded-full" style={{ width: `${Math.round(into * 100)}%`, background: 'linear-gradient(90deg,#4ADE80,#10B981)' }} />
+              </div>
+              <div className="mt-1.5 flex gap-1" aria-hidden="true">
+                {STAGES.map((s, i) => (
+                  <span key={s.id} className={`h-1 flex-1 rounded-full ${i <= stage.index ? 'bg-green' : 'bg-line'}`} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <dl className="m-0 mt-3 grid grid-cols-2 gap-2">
             {tiles.map(([label, v]) => (
               <div key={label} className="rounded-2xl bg-bg px-3 py-2.5">
                 <dt className="text-xs text-muted">{label}</dt>
-                <dd className="text-xl font-semibold tabular-nums">{v}</dd>
+                <dd className="m-0 text-xl font-extrabold tabular-nums">{v}</dd>
               </div>
             ))}
           </dl>
-          <p className="mt-3 flex items-start gap-2 rounded-2xl bg-sky-soft px-3 py-2.5 text-xs leading-relaxed">
+
+          <p className="mt-3 flex items-start gap-2 rounded-2xl bg-sky-soft px-3 py-2.5 text-xs leading-relaxed text-ink">
             <Snowflake size={15} className="mt-0.5 shrink-0 text-sky" />
             <span>
-              <strong className="font-semibold">{st.freezeAvailable ? t('stats.freezeReady') : t('stats.freezeUsed')}</strong>
+              <strong className="font-bold">{st.freezeAvailable ? t('stats.freezeReady') : t('stats.freezeUsed')}</strong>
               {' · '}
               {t('stats.freezeHelp')}
               {st.freezes > 0 && ` ${t('stats.freezes')}: ${st.freezes}.`}
             </span>
           </p>
-          <h3 className="mb-2 mt-4 text-xs font-semibold text-muted">{t('ach.title')}</h3>
-          <ul className="grid grid-cols-6 gap-1.5">
-            {st.achievements.map((a) => {
-              const I = ACH_ICONS[a.icon];
-              const name = t(`ach.${a.id}`);
-              return (
-                <li key={a.id}>
-                  <button
-                    type="button"
-                    onClick={() => setPicked(picked === a.id ? null : a.id)}
-                    aria-label={`${name}${a.unlocked ? '' : ` · ${t('ach.locked')}`}`}
-                    className={`grid aspect-square w-full place-items-center rounded-2xl ${
-                      a.unlocked ? 'bg-sun-soft text-sun-deep' : 'bg-bg text-muted/40'
-                    } ${picked === a.id ? 'ring-2 ring-sun' : ''}`}
-                  >
-                    <I size={20} />
-                  </button>
-                </li>
-              );
-            })}
+
+          <h3 className="eyebrow mb-2 mt-4">{t('ach.title')}</h3>
+          <ul className="m-0 grid list-none grid-cols-6 gap-1.5 p-0">
+            {st.achievements.map((a) => (
+              <li key={a.id}>
+                <button
+                  type="button"
+                  onClick={() => setPicked(picked === a.id ? null : a.id)}
+                  aria-label={`${t(`ach.${a.id}`)}${a.unlocked ? '' : ` · ${t('ach.locked')}`}`}
+                  className={`grid aspect-square w-full min-w-11 place-items-center rounded-2xl ${a.unlocked ? 'bg-tint' : 'bg-bg'} ${picked === a.id ? 'ring-2 ring-primary' : ''}`}
+                >
+                  <Medal id={a.id} locked={!a.unlocked} size={32} />
+                </button>
+              </li>
+            ))}
           </ul>
-          <p className="mt-2 min-h-5 text-center text-xs text-muted" aria-live="polite">
-            {picked && `${t(`ach.${picked}`)}${st.achievements.find((a) => a.id === picked)?.unlocked ? ' ✓' : ` · ${t('ach.locked')}`}`}
+          <p className="mt-2 min-h-5 text-center text-xs text-ink2" aria-live="polite">
+            {picked && `${t(`ach.${picked}`)} · ${st.achievements.find((a) => a.id === picked)?.unlocked ? t('ach.have') : t(`ach.how.${picked}`)}`}
           </p>
+
+          <h3 className="eyebrow mb-2 mt-3">{t('buddies.title')}</h3>
+          <ul className="m-0 grid list-none grid-cols-3 gap-2 p-0">
+            {st.companions.map((c) => (
+              <li key={c.id} className="flex flex-col items-center rounded-2xl bg-bg px-1 pb-2 pt-1">
+                <CompanionArt species={c.id} size={62} silhouette={!c.unlocked} />
+                <span className="text-xs font-bold">{c.unlocked ? t(`buddy.${c.id}`) : '???'}</span>
+                <span className="text-center text-[10.5px] leading-tight text-muted">{c.unlocked ? t(`buddy.${c.id}.kind`) : t(`buddy.${c.id}.how`)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </section>
-  );
-}
-
-// ---------------------------------------------------------------- Done card
-export const DoneCard = forwardRef(function DoneCard({ t, praise, bonus, streak }, ref) {
-  return (
-    <div ref={ref} className="card rise-in mb-3 flex flex-col items-center px-5 py-6 text-center">
-      <div className="mb-2 grid h-12 w-12 place-items-center rounded-full bg-leaf-soft text-leaf">
-        <Sprout size={24} />
-      </div>
-      <h3 className="text-lg font-semibold">{t('done.title')}</h3>
-      <p className="mt-1 text-sm text-muted">{praise}</p>
-      <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs font-medium">
-        <span className="rounded-full bg-sun-soft px-3 py-1 text-sun-deep">{t('done.bonus', { xp: bonus })}</span>
-        {streak > 0 && <span className="rounded-full bg-leaf-soft px-3 py-1 text-leaf">{t('done.chain', { n: streak })}</span>}
-      </div>
-    </div>
   );
 });
 
 // ---------------------------------------------------------------- Toasts
 export function Toasts({ toasts, onDismiss }) {
   return (
-    <div className="safe-bottom pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 px-4" aria-live="polite">
+    <div className="safe-top pointer-events-none fixed inset-x-0 top-0 z-50 flex flex-col items-center gap-2 px-4" aria-live="polite">
       {toasts.map((x) => (
         <div
           key={x.id}
           onClick={() => onDismiss(x.id)}
-          className="toast-in pointer-events-auto flex max-w-sm items-center gap-2.5 rounded-full bg-ink px-4 py-2.5 text-sm text-bg shadow-lg"
+          className="toast-in pointer-events-auto flex max-w-sm items-center gap-2.5 rounded-full bg-navy py-2 pe-4 ps-2 text-[13.5px] font-semibold text-white shadow-[0_12px_30px_rgb(20_24_60/0.3)]"
         >
-          {x.icon}
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10">{x.icon}</span>
           <span>{x.text}</span>
           {x.action && (
             <button
@@ -261,7 +224,7 @@ export function Toasts({ toasts, onDismiss }) {
                 e.stopPropagation();
                 x.action.run();
               }}
-              className="ms-1 min-h-8 rounded-full bg-bg/15 px-3 font-semibold"
+              className="ms-1 min-h-8 rounded-full bg-white/15 px-3 font-bold"
             >
               {x.action.label}
             </button>
@@ -272,11 +235,31 @@ export function Toasts({ toasts, onDismiss }) {
   );
 }
 
-// ---------------------------------------------------------------- Routine editor
-export function RoutineSheet({ t, routines, lang, onSave, onLang, onClose }) {
-  const [list, setList] = useState(routines.map((r) => ({ ...r })));
+// ---------------------------------------------------------------- Settings sheet
+export function SettingsSheet({ t, state, st, onSave, onLang, onProfile, onClose }) {
+  const [list, setList] = useState(state.routines.map((r) => ({ ...r })));
   const [draft, setDraft] = useState('');
+  const [name, setName] = useState(state.name || '');
   const panel = useRef(null);
+  const listRef = useRef(list);
+  listRef.current = list;
+  const nameRef = useRef(name);
+  nameRef.current = name;
+
+  function finish() {
+    const clean = listRef.current
+      .map((r) => {
+        const { edit, ...rest } = r;
+        if (edit === undefined) return rest;
+        const title = edit.trim();
+        if (!title) return null;
+        return rest.key && title === t(rest.key) ? rest : { ...rest, title };
+      })
+      .filter(Boolean);
+    onSave(clean);
+    onProfile({ name: nameRef.current });
+    onClose();
+  }
 
   useEffect(() => {
     const prev = document.activeElement;
@@ -287,75 +270,111 @@ export function RoutineSheet({ t, routines, lang, onSave, onLang, onClose }) {
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
-      prev && prev.focus && prev.focus();
+      prev?.focus?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const listRef = useRef(list);
-  listRef.current = list;
-  function finish() {
-    const clean = listRef.current
-      .map((r) => {
-        const title = (r.edit ?? '').trim();
-        const { edit, ...rest } = r;
-        if (edit === undefined) return rest;
-        if (!title) return null; // emptied = removed
-        return title === t(r.key) ? rest : { ...rest, title };
-      })
-      .filter(Boolean);
-    onSave(clean);
-    onClose();
-  }
 
   const add = (e) => {
     e.preventDefault();
     const title = draft.trim();
     if (!title) return;
-    setList((l) => [...l, { id: `r-${Date.now().toString(36)}`, title, icon: 'leaf' }]);
+    setList((l) => [...l, { id: `r-${Date.now().toString(36)}`, title, icon: 'star' }]);
     setDraft('');
   };
+  const cycleIcon = (i) =>
+    setList((l) =>
+      l.map((x, j) => {
+        if (j !== i) return x;
+        const cur = MISSION_ICONS.indexOf(iconKey(x.icon));
+        return { ...x, icon: MISSION_ICONS[(cur + 1) % MISSION_ICONS.length] };
+      }),
+    );
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="sheet-h">
-      <div className="fade-in absolute inset-0 bg-black/30" onClick={finish} />
-      <div
-        ref={panel}
-        tabIndex={-1}
-        className="sheet-up safe-bottom relative max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-card px-4 pt-3 shadow-2xl focus:outline-none"
-      >
+      <div className="fade-in absolute inset-0 bg-[#121735]/35" onClick={finish} />
+      <div ref={panel} tabIndex={-1} className="sheet-up safe-bottom relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-card px-4 pt-3 shadow-2xl focus:outline-none">
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line" />
-        <div className="mb-1 flex items-center">
-          <h2 id="sheet-h" className="flex-1 text-lg font-semibold">
-            {t('edit.title')}
+        <div className="mb-3 flex items-center">
+          <h2 id="sheet-h" className="flex-1 text-xl font-extrabold tracking-[-0.02em]">
+            {t('settings.title')}
           </h2>
-          <button type="button" onClick={finish} className="h-11 rounded-full bg-ink px-5 text-sm font-semibold text-bg">
+          <button type="button" onClick={finish} className="h-11 rounded-full px-5 text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg,#8B93FF,#4F46E5)' }}>
             {t('edit.done')}
           </button>
         </div>
-        <p className="mb-3 text-sm text-muted">{t('edit.hint')}</p>
-        <ul className="space-y-2">
-          {list.map((r, i) => (
-            <li key={r.id} className="flex items-center gap-2">
-              <input
-                value={r.edit ?? itemTitle(t, r)}
-                maxLength={MAX_TITLE}
-                onChange={(e) => setList((l) => l.map((x, j) => (j === i ? { ...x, edit: e.target.value } : x)))}
-                enterKeyHint="done"
-                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                aria-label={itemTitle(t, r)}
-                className="h-12 min-w-0 flex-1 rounded-2xl bg-bg px-4 text-base text-ink focus:outline-none focus:ring-2 focus:ring-leaf"
-              />
+
+        <h3 className="eyebrow mb-2">{t('buddies.pick')}</h3>
+        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={t('buddies.pick')}>
+          {st.companions.map((c) => {
+            const sel = state.buddy === c.id;
+            return (
               <button
+                key={c.id}
                 type="button"
-                onClick={() => setList((l) => l.filter((_, j) => j !== i))}
-                aria-label={`${t('edit.delete')}: ${itemTitle(t, r)}`}
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted active:bg-line/60"
+                role="radio"
+                aria-checked={sel}
+                disabled={!c.unlocked}
+                onClick={() => onProfile({ buddy: c.id })}
+                className={`flex flex-col items-center rounded-2xl px-1 pb-2 pt-1 transition ${sel ? 'bg-tint ring-2 ring-primary' : 'bg-bg'} disabled:cursor-not-allowed`}
               >
-                <Trash2 size={18} />
+                <CompanionArt species={c.id} size={64} silhouette={!c.unlocked} mood={sel ? 'happy' : 'idle'} />
+                <span className="flex items-center gap-1 text-xs font-bold">
+                  {!c.unlocked && <Lock size={11} />}
+                  {c.unlocked ? t(`buddy.${c.id}`) : '???'}
+                </span>
+                <span className="text-center text-[10.5px] leading-tight text-muted">{c.unlocked ? t(`buddy.${c.id}.kind`) : t(`buddy.${c.id}.how`)}</span>
               </button>
-            </li>
-          ))}
+            );
+          })}
+        </div>
+
+        <label className="eyebrow mb-2 mt-5 block" htmlFor="name-input">
+          {t('settings.name')}
+        </label>
+        <input
+          id="name-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={24}
+          placeholder={t('settings.namePh')}
+          enterKeyHint="done"
+          autoComplete="given-name"
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          className="h-12 w-full rounded-2xl bg-bg px-4 text-base text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+
+        <h3 className="eyebrow mb-1 mt-5">{t('edit.title')}</h3>
+        <p className="mb-2 text-[13px] text-ink2">{t('edit.hint')}</p>
+        <ul className="m-0 list-none space-y-2 p-0">
+          {list.map((r, i) => {
+            const k = iconKey(r.icon);
+            return (
+              <li key={r.id} className="flex items-center gap-2">
+                <button type="button" onClick={() => cycleIcon(i)} aria-label={t('edit.icon')} className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px]" style={{ background: MISSION_TINT[k] }}>
+                  <MissionIcon kind={k} size={24} />
+                </button>
+                <input
+                  value={r.edit ?? itemTitle(t, r)}
+                  maxLength={MAX_TITLE}
+                  onChange={(e) => setList((l) => l.map((x, j) => (j === i ? { ...x, edit: e.target.value } : x)))}
+                  enterKeyHint="done"
+                  onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                  aria-label={itemTitle(t, r)}
+                  className="h-12 min-w-0 flex-1 rounded-2xl bg-bg px-4 text-base text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setList((l) => l.filter((_, j) => j !== i))}
+                  aria-label={`${t('edit.delete')}: ${itemTitle(t, r)}`}
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted active:bg-line/60"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </li>
+            );
+          })}
         </ul>
         <form onSubmit={add} className="mt-2 flex items-center gap-2">
           <input
@@ -365,15 +384,15 @@ export function RoutineSheet({ t, routines, lang, onSave, onLang, onClose }) {
             aria-label={t('edit.add')}
             maxLength={MAX_TITLE}
             enterKeyHint="done"
-            className="h-12 min-w-0 flex-1 rounded-2xl border border-dashed border-line bg-transparent px-4 text-base placeholder:text-muted focus:border-leaf focus:outline-none"
+            className="h-12 min-w-0 flex-1 rounded-2xl border-[1.5px] border-dashed border-line bg-transparent px-4 text-base placeholder:text-muted focus:border-primary focus:outline-none"
           />
-          <button type="submit" disabled={!draft.trim()} aria-label={t('edit.add')} className="grid h-12 w-12 place-items-center rounded-2xl bg-leaf text-white disabled:opacity-30">
+          <button type="submit" disabled={!draft.trim()} aria-label={t('edit.add')} className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white disabled:opacity-30">
             <Plus size={20} />
           </button>
         </form>
 
-        <div className="mb-2 mt-6">
-          <h3 className="mb-2 text-xs font-semibold text-muted">{t('edit.lang')}</h3>
+        <div className="mb-3 mt-6">
+          <h3 className="eyebrow mb-2">{t('edit.lang')}</h3>
           <div className="grid grid-cols-3 gap-1 rounded-2xl bg-bg p-1" role="radiogroup" aria-label={t('edit.lang')}>
             {[
               [null, t('edit.lang.auto')],
@@ -384,18 +403,15 @@ export function RoutineSheet({ t, routines, lang, onSave, onLang, onClose }) {
                 key={label}
                 type="button"
                 role="radio"
-                aria-checked={lang === v}
+                aria-checked={state.lang === v}
                 onClick={() => onLang(v)}
-                className={`h-10 rounded-xl text-sm ${lang === v ? 'bg-card font-semibold shadow-sm' : 'text-muted'}`}
+                className={`h-11 rounded-xl text-sm ${state.lang === v ? 'bg-card font-bold text-primary-deep shadow-sm' : 'text-ink2'}`}
               >
                 {label}
               </button>
             ))}
           </div>
         </div>
-        <button type="button" onClick={finish} className="sr-only">
-          <X /> {t('close')}
-        </button>
       </div>
     </div>
   );

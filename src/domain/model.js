@@ -31,10 +31,10 @@ export const ALL_DONE_BONUS = 20;
 export const MAX_TITLE = 80;
 
 export const DEFAULT_ROUTINES = [
-  { id: 'r-teeth', key: 'routine.teeth', icon: 'teeth' },
+  { id: 'r-teeth', key: 'routine.teeth', icon: 'tooth' },
   { id: 'r-bed', key: 'routine.bed', icon: 'bed' },
   { id: 'r-read', key: 'routine.read', icon: 'book' },
-  { id: 'r-mind', key: 'routine.mind', icon: 'wind' },
+  { id: 'r-mind', key: 'routine.mind', icon: 'lotus' },
 ];
 
 export const STAGES = [
@@ -55,6 +55,13 @@ export const ACHIEVEMENTS = [
   { id: 'tasks-50', icon: 'star', test: (s) => s.totalTasks >= 50 },
 ];
 
+/** Companions: one starter, two found through progress (checked against derived stats). */
+export const COMPANIONS = [
+  { id: 'moji', test: () => true },
+  { id: 'luma', test: (s) => s.bestStreak >= 7 },
+  { id: 'nori', test: (s) => s.totalTasks >= 50 },
+];
+
 /** Outfit pieces the buddy unlocks by level. */
 export const WARDROBE = [
   { id: 'scarf', level: 2 },
@@ -69,6 +76,8 @@ export function createState() {
   return {
     schema: SCHEMA_VERSION,
     lang: null,
+    name: null,
+    buddy: 'moji',
     routines: DEFAULT_ROUTINES.map((r) => ({ ...r })),
     days: {},
     seen: [],
@@ -126,6 +135,8 @@ export function normalize(raw) {
   // Unknown top-level fields (e.g. written by a newer version) are kept as-is.
   const out = { ...s, ...base };
   out.lang = s.lang === 'en' || s.lang === 'he' ? s.lang : null;
+  out.name = cleanTitle(s.name)?.slice(0, 24) || null;
+  out.buddy = COMPANIONS.some((c) => c.id === s.buddy) ? s.buddy : 'moji';
   if (Array.isArray(s.routines)) {
     out.routines = uniqueBy(
       s.routines.map((r) => normItem(r, 'routine')).filter(Boolean).map(({ kind, ...r }) => r),
@@ -195,7 +206,7 @@ export function importLegacy(legacyRaw, today) {
       const title = cleanTitle(h && h.txt);
       if (!title || LEGACY_SEED_MAP[title]) continue;
       if (routines.some((r) => r.title === title)) continue;
-      routines.push({ id: `r-legacy-${routines.length}-${num(h.id)}`, title, icon: 'leaf' });
+      routines.push({ id: `r-legacy-${routines.length}-${num(h.id)}`, title, icon: 'sprout' });
     }
     for (const t of Array.isArray(raw.tasks) ? raw.tasks : []) {
       const title = cleanTitle(t && t.txt);
@@ -469,17 +480,28 @@ export function stats(state, today) {
     freezeAvailable: !freezeWeeksUsed(state).has(weekStart(today)),
   };
   s.achievements = ACHIEVEMENTS.map((a) => ({ id: a.id, icon: a.icon, unlocked: a.test(s) }));
+  s.companions = COMPANIONS.map((c) => ({ id: c.id, unlocked: c.test(s) }));
   return s;
 }
 
 /** Achievements that are unlocked now but whose toast has never been shown. */
 export function newlyUnlocked(state, st) {
-  return st.achievements.filter((a) => a.unlocked && !state.seen.includes(a.id)).map((a) => a.id);
+  return [
+    ...st.achievements.filter((a) => a.unlocked && !state.seen.includes(a.id)).map((a) => a.id),
+    ...st.companions.filter((c) => c.id !== 'moji' && c.unlocked && !state.seen.includes(`buddy-${c.id}`)).map((c) => `buddy-${c.id}`),
+  ];
 }
 
 export function markSeen(state, ids) {
   if (!ids.length) return state;
   return { ...state, seen: [...new Set([...state.seen, ...ids])] };
+}
+
+export function setProfile(state, { name, buddy }) {
+  const next = { ...state };
+  if (name !== undefined) next.name = cleanTitle(name)?.slice(0, 24) || null;
+  if (buddy !== undefined && COMPANIONS.some((c) => c.id === buddy)) next.buddy = buddy;
+  return next;
 }
 
 export function setLang(state, lang) {

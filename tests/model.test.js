@@ -280,8 +280,23 @@ describe('growth, levels & achievements', () => {
     for (let i = 0; i < 7; i++) spec[D.addDays('2026-09-01', i)] = 4;
     let s = withDays(spec);
     const st = M.stats(s, '2026-09-07');
-    expect(M.newlyUnlocked(s, st)).toEqual(['first-day', 'streak-7']);
+    expect(M.newlyUnlocked(s, st)).toEqual(['first-day', 'streak-7', 'buddy-luma']);
     s = M.markSeen(s, M.newlyUnlocked(s, st));
     expect(M.newlyUnlocked(s, M.stats(s, '2026-09-07'))).toEqual([]);
+  });
+});
+
+describe('profile & companions', () => {
+  it('normalises name and buddy', () => {
+    const s = M.normalize({ schema: 1, name: '  Dana  ', buddy: 'dragon', days: {} });
+    expect(s.name).toBe('Dana');
+    expect(s.buddy).toBe('moji');
+    expect(M.setProfile(s, { name: '', buddy: 'luma' })).toMatchObject({ name: null, buddy: 'luma' });
+  });
+  it('companions unlock from derived progress', () => {
+    const spec = {};
+    for (let i = 0; i < 13; i++) spec[D.addDays('2026-08-01', i * 2)] = 4; // 52 tasks, no chain
+    const st = M.stats(withDays(spec), '2026-08-30');
+    expect(st.companions.map((c) => c.unlocked)).toEqual([true, false, true]);
   });
 });

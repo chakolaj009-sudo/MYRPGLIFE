@@ -1,5 +1,5 @@
 // Growth stage illustration: Seed → Sprout → Young plant → Sapling → Mature tree → Ancient tree.
-const L = 'var(--leaf)';
+const L = '#4FAE7C';
 const LD = '#3E9467';
 const LL = '#8ED3A8';
 const BARK = '#9A6B4F';
@@ -27,7 +27,7 @@ const STAGES = {
     <g>
       <ellipse cx="60" cy="113" rx="8" ry="6" fill={BARK} transform="rotate(-20 60 113)" />
       <path d="M58 109 q 3 -5 7 -6" stroke={LL} strokeWidth="2.5" fill="none" strokeLinecap="round" />
-      <g fill="var(--sun)">
+      <g fill="#F2B53D">
         <circle cx="80" cy="94" r="2" />
         <circle cx="42" cy="100" r="1.5" />
       </g>
@@ -108,7 +108,7 @@ const STAGES = {
           <circle key={i} cx={x} cy={y} r="3.4" />
         ))}
       </g>
-      <g fill="var(--sun)">
+      <g fill="#F2B53D">
         <circle cx="16" cy="30" r="1.8" />
         <circle cx="106" cy="44" r="1.6" />
         <circle cx="98" cy="14" r="1.4" />
@@ -117,10 +117,10 @@ const STAGES = {
   ),
 };
 
-export default function Plant({ stage, label }) {
+export default function Plant({ stage, label, size = 118, soil = true }) {
   return (
-    <svg viewBox="0 0 120 136" width="118" height="134" role="img" aria-label={label}>
-      <Soil />
+    <svg viewBox={soil ? '0 0 120 136' : '10 6 100 122'} width={size} height={size * (soil ? 136 / 120 : 122 / 100)} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : 'true'}>
+      {soil ? <Soil /> : <ellipse cx="60" cy="122" rx="30" ry="5" fill="#B98A68" />}
       <g key={stage} className="grow-in">
         {STAGES[stage] || STAGES.seed}
       </g>

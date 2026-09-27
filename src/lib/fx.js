@@ -36,8 +36,8 @@ export function flyXp(from, to, { count = 7, onHit } = {}) {
       marginLeft: `${-size / 2}px`,
       marginTop: `${-size / 2}px`,
       borderRadius: '999px',
-      background: i % 2 ? 'var(--sun)' : 'radial-gradient(circle at 35% 35%, #fff6d8, var(--sun) 60%, var(--sun-deep))',
-      boxShadow: '0 0 8px rgb(242 181 61 / 0.7)',
+      background: i % 3 === 2 ? '#FBBF24' : 'radial-gradient(circle at 35% 35%, #fff, #A5B4FC 45%, #6366F1 100%)',
+      boxShadow: i % 3 === 2 ? '0 0 10px 2px rgb(251 191 36 / 0.6)' : '0 0 12px 4px rgb(129 140 248 / 0.55)',
       willChange: 'transform, opacity',
     });
     root.appendChild(dot);
@@ -74,7 +74,7 @@ export function sparkleBurst(el, count = 14) {
   if (!el || prefersReducedMotion()) return;
   const r = el.getBoundingClientRect();
   const root = layer();
-  const colors = ['var(--sun)', 'var(--leaf)', 'var(--peach)', 'var(--sky)'];
+  const colors = ['#FBBF24', '#6366F1', '#22C55E', '#F472B6', '#38BDF8'];
   for (let i = 0; i < count; i++) {
     const s = document.createElement('div');
     const a = (i / count) * Math.PI * 2 + Math.random() * 0.4;
@@ -93,6 +93,18 @@ export function sparkleBurst(el, count = 14) {
     root.appendChild(s);
     setTimeout(() => s.remove(), 1200);
   }
+}
+
+/** A small "+10 XP" label that floats up from a point. */
+export function floatText(at, text) {
+  if (!at || prefersReducedMotion()) return;
+  const el = document.createElement('div');
+  el.className = 'xp-float';
+  el.textContent = text;
+  el.style.left = `${at.x}px`;
+  el.style.top = `${at.y}px`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1150);
 }
 
 export function haptic(ms = 8) {

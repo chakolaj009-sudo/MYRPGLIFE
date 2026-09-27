@@ -20,9 +20,9 @@ await shot(iconSvg({ size: 512, pad: 0.22 }), 512, 512, 'icons/maskable-512.png'
 await shot(iconSvg({ size: 180 }), 180, 180, 'icons/apple-touch-icon.png');
 
 for (const [w, h] of [[1170, 2532], [1179, 2556], [1284, 2778]]) {
-  const html = `<div style="width:${w}px;height:${h}px;background:#F7F3EC;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui,sans-serif">
+  const html = `<div style="width:${w}px;height:${h}px;background:linear-gradient(#A9C2F3,#E6E3F7 55%,#F6F7FB);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui,sans-serif">
     <div style="width:${w * 0.42}px;height:${w * 0.42}px;border-radius:${w * 0.1}px;overflow:hidden">${iconSvg({ size: w * 0.42 })}</div>
-    <div style="margin-top:${w * 0.06}px;font-size:${w * 0.07}px;font-weight:600;color:#2F3A34">My Day</div></div>`;
+    <div style="margin-top:${w * 0.06}px;font-size:${w * 0.07}px;font-weight:600;color:#121735">My Day</div></div>`;
   await shot(html, w, h, `splash/iphone-${w}x${h}.png`);
 }
 await browser.close();
