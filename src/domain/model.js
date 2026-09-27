@@ -273,12 +273,13 @@ export function toggleItem(state, today, id) {
   return { ...s, days: { ...s.days, [today]: { ...day, done } } };
 }
 
-export function addCustom(state, today, title, id = `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`) {
+export function addCustom(state, today, title, id = `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, icon) {
   const t = cleanTitle(title);
   if (!t) return state;
   const s = ensureDay(state, today);
   const day = s.days[today];
-  return { ...s, days: { ...s.days, [today]: { ...day, items: [...day.items, { id, kind: 'custom', title: t }] } } };
+  const item = { id, kind: 'custom', title: t, ...(typeof icon === 'string' ? { icon } : {}) };
+  return { ...s, days: { ...s.days, [today]: { ...day, items: [...day.items, item] } } };
 }
 
 export function removeItem(state, today, id) {
