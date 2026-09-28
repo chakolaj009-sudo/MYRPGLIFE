@@ -36,8 +36,8 @@ export function flyXp(from, to, { count = 7, onHit } = {}) {
       marginLeft: `${-size / 2}px`,
       marginTop: `${-size / 2}px`,
       borderRadius: '999px',
-      background: i % 3 === 2 ? '#FBBF24' : 'radial-gradient(circle at 35% 35%, #fff, #A5B4FC 45%, #6366F1 100%)',
-      boxShadow: i % 3 === 2 ? '0 0 10px 2px rgb(251 191 36 / 0.6)' : '0 0 12px 4px rgb(129 140 248 / 0.55)',
+      background: 'var(--accent)',
+      boxShadow: '0 0 0 2px rgb(255 255 255 / 0.7), 0 2px 8px rgb(21 23 42 / 0.2)',
       willChange: 'transform, opacity',
     });
     root.appendChild(dot);
@@ -70,11 +70,11 @@ export function flyXp(from, to, { count = 7, onHit } = {}) {
 }
 
 /** Small star burst around an element (daily completion). */
-export function sparkleBurst(el, count = 14) {
+export function sparkleBurst(el, count = 10) {
   if (!el || prefersReducedMotion()) return;
   const r = el.getBoundingClientRect();
   const root = layer();
-  const colors = ['#FBBF24', '#6366F1', '#22C55E', '#F472B6', '#38BDF8'];
+  const colors = ['var(--accent)', 'var(--success)'];
   for (let i = 0; i < count; i++) {
     const s = document.createElement('div');
     const a = (i / count) * Math.PI * 2 + Math.random() * 0.4;

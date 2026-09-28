@@ -187,7 +187,7 @@ await check('all done → celebration card, bonus and level 2', async (page) => 
     await settle(page, 400);
   }
   await settle(page, 9000); // companion does each mission in turn
-  assert(await page.getByText('All done for today').isVisible(), 'no completion card');
+  assert(await page.getByRole('heading', { name: 'All done today' }).isVisible(), 'no completion state');
   assert(await page.getByText('+20 XP day bonus').isVisible(), 'no bonus');
   await xpIs(page, '10 / 75 XP');
 });

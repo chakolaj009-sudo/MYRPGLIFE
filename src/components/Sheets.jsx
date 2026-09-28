@@ -1,33 +1,58 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, RotateCcw, X } from 'lucide-react';
 import { itemTitle } from '../lib/i18n.js';
 import { MAX_TITLE } from '../domain/model.js';
-import { MissionIcon, MISSION_ICONS, MISSION_TINT, iconKey } from './Art.jsx';
+import { prefersReducedMotion } from '../lib/fx.js';
+import { MissionIcon, MISSION_ICONS, iconKey } from './Art.jsx';
 
-export function Sheet({ title, onClose, children, t }) {
+const EXIT_MS = 180;
+
+/**
+ * Bottom sheet (a centred dialog on desktop). Closing plays a short exit
+ * before unmounting so it never just vanishes. `action` replaces the close
+ * button (e.g. a "Done" button); `onClosing` runs as the exit starts,
+ * `onClose` after it.
+ */
+export function Sheet({ title, onClose, onClosing, children, t, action, labelId }) {
   const panel = useRef(null);
+  const [closing, setClosing] = useState(false);
+  const done = useRef(onClose);
+  done.current = onClose;
+  const starting = useRef(onClosing);
+  starting.current = onClosing;
+  const leaving = useRef(false);
+  const close = useCallback(() => {
+    if (leaving.current) return;
+    leaving.current = true;
+    starting.current?.();
+    setClosing(true);
+    setTimeout(() => done.current(), prefersReducedMotion() ? 0 : EXIT_MS);
+  }, []);
   useEffect(() => {
     const prev = document.activeElement;
     panel.current?.focus();
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    const onKey = (e) => e.key === 'Escape' && close();
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
       prev?.focus?.();
     };
-  }, [onClose]);
+  }, [close]);
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="fade-in absolute inset-0 bg-[#121735]/40" onClick={onClose} />
-      <div ref={panel} tabIndex={-1} className="sheet-up safe-bottom relative max-h-[86dvh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-bg px-4 pt-3 shadow-2xl focus:outline-none">
-        <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-line" />
-        <div className="mb-3 flex items-center">
-          <h2 className="flex-1 text-xl font-extrabold tracking-[-0.02em]">{title}</h2>
-          <button type="button" onClick={onClose} aria-label={t('close')} className="grid h-11 w-11 place-items-center rounded-full bg-card text-ink2 shadow-sm">
-            <X size={18} />
-          </button>
+    <div className={`sheet-wrap ${closing ? 'closing' : ''}`} role="dialog" aria-modal="true" {...(labelId ? { 'aria-labelledby': labelId } : { 'aria-label': title })}>
+      <div className="sheet-scrim" onClick={close} />
+      <div ref={panel} tabIndex={-1} className="sheet safe-bottom">
+        <div className="sheet-head">
+          <h2 id={labelId} className="t-title flex-1">
+            {title}
+          </h2>
+          {action ? action(close) : (
+            <button type="button" onClick={close} aria-label={t('close')} className="icon-btn">
+              <X size={18} />
+            </button>
+          )}
         </div>
-        {children}
+        <div className="sheet-body">{typeof children === 'function' ? children(close) : children}</div>
       </div>
     </div>
   );
@@ -36,22 +61,19 @@ export function Sheet({ title, onClose, children, t }) {
 export function PlayedSheet({ t, items, minimum, onUndo, onClose }) {
   return (
     <Sheet title={t('today.doneDrawer', { n: items.length })} onClose={onClose} t={t}>
-      <p className="mb-3 text-[13px] text-ink2">{t('played.hint')}</p>
-      <ul className="m-0 mb-3 list-none space-y-2 p-0">
-        {items.map((item) => {
-          const k = iconKey(item.icon || (item.kind === 'custom' ? 'star' : 'sprout'));
-          return (
-            <li key={item.id} className="card flex items-center gap-3 px-3 py-2.5">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px]" style={{ background: MISSION_TINT[k] }}>
-                <MissionIcon kind={k} size={24} />
-              </span>
-              <span className="min-w-0 flex-1 text-[15px] font-semibold">{itemTitle(t, item, minimum)}</span>
-              <button type="button" onClick={() => onUndo(item.id)} className="flex min-h-11 items-center gap-1.5 rounded-full bg-bg px-3 text-sm font-semibold text-ink2">
-                <RotateCcw size={15} /> {t('today.undoShort')}
-              </button>
-            </li>
-          );
-        })}
+      <p className="t-meta mb-2">{t('played.hint')}</p>
+      <ul className="m-0 mb-4 list-none p-0">
+        {items.map((item) => (
+          <li key={item.id} className="row fade-in">
+            <span className="tile-ico">
+              <MissionIcon kind={iconKey(item.icon || (item.kind === 'custom' ? 'star' : 'sprout'))} size={22} />
+            </span>
+            <span className="t-body min-w-0 flex-1">{itemTitle(t, item, minimum)}</span>
+            <button type="button" onClick={() => onUndo(item.id)} className="btn btn-ghost btn-sm" data-hit="extended">
+              <RotateCcw size={14} /> {t('today.undoShort')}
+            </button>
+          </li>
+        ))}
       </ul>
     </Sheet>
   );
@@ -66,70 +88,66 @@ export function AddSheet({ t, onAdd, onClose }) {
     const id = setTimeout(() => input.current?.focus(), 250);
     return () => clearTimeout(id);
   }, []);
-  const submit = (e) => {
-    e.preventDefault();
-    const v = title.trim();
-    if (!v) return;
-    onAdd(v, icon, mini.trim() || null);
-    onClose();
-  };
   return (
     <Sheet title={t('add.title')} onClose={onClose} t={t}>
-      <form onSubmit={submit}>
-        <label className="sr-only" htmlFor="new-task">
-          {t('today.add')}
-        </label>
-        <input
-          id="new-task"
-          ref={input}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder={t('today.add')}
-          maxLength={MAX_TITLE}
-          enterKeyHint="done"
-          autoComplete="off"
-          autoCapitalize="sentences"
-          className="h-14 w-full rounded-2xl bg-card px-4 text-base text-ink shadow-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-        <label className="eyebrow mb-2 mt-4 block" htmlFor="new-task-mini">
-          {t('min.tiny')}
-        </label>
-        <input
-          id="new-task-mini"
-          value={mini}
-          onChange={(e) => setMini(e.target.value)}
-          placeholder={t('min.tinyPh')}
-          maxLength={MAX_TITLE}
-          enterKeyHint="done"
-          autoComplete="off"
-          className="h-12 w-full rounded-2xl bg-card px-4 text-base text-ink shadow-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-        <p className="eyebrow mb-2 mt-4">{t('add.icon')}</p>
-        <div className="grid grid-cols-7 gap-1.5" role="radiogroup" aria-label={t('add.icon')}>
-          {MISSION_ICONS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              role="radio"
-              aria-checked={icon === k}
-              aria-label={k}
-              onClick={() => setIcon(k)}
-              className={`grid aspect-square min-h-11 place-items-center rounded-[13px] ${icon === k ? 'ring-2 ring-primary' : ''}`}
-              style={{ background: MISSION_TINT[k] }}
-            >
-              <MissionIcon kind={k} size={22} />
-            </button>
-          ))}
-        </div>
-        <button
-          type="submit"
-          disabled={!title.trim()}
-          className="mb-3 mt-5 flex h-13 min-h-12 w-full items-center justify-center gap-2 rounded-2xl text-base font-bold text-white shadow-[0_8px_20px_rgb(79_70_229/0.35)] disabled:opacity-40"
-          style={{ background: 'linear-gradient(135deg,#8B93FF,#4F46E5)' }}
+      {(close) => (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const v = title.trim();
+            if (!v) return;
+            onAdd(v, icon, mini.trim() || null);
+            close();
+          }}
+          className="flex flex-col gap-4 pb-4"
         >
-          <Plus size={20} /> {t('add.cta')}
-        </button>
-      </form>
+          <div>
+            <label className="t-label mb-2 block" htmlFor="new-task">
+              {t('add.label')}
+            </label>
+            <input
+              id="new-task"
+              ref={input}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t('today.add')}
+              maxLength={MAX_TITLE}
+              enterKeyHint="done"
+              autoComplete="off"
+              autoCapitalize="sentences"
+              className="field"
+            />
+          </div>
+          <div>
+            <label className="t-label mb-2 block" htmlFor="new-task-mini">
+              {t('min.tiny')}
+            </label>
+            <input
+              id="new-task-mini"
+              value={mini}
+              onChange={(e) => setMini(e.target.value)}
+              placeholder={t('min.tinyPh')}
+              maxLength={MAX_TITLE}
+              enterKeyHint="done"
+              autoComplete="off"
+              className="field"
+            />
+          </div>
+          <div>
+            <p className="t-label mb-2">{t('add.icon')}</p>
+            <div className="grid grid-cols-7 gap-1" role="radiogroup" aria-label={t('add.icon')}>
+              {MISSION_ICONS.map((k) => (
+                <button key={k} type="button" role="radio" aria-checked={icon === k} aria-label={k} onClick={() => setIcon(k)} className="pick grid aspect-square min-h-11 place-items-center">
+                  <MissionIcon kind={k} size={22} />
+                </button>
+              ))}
+            </div>
+          </div>
+          <button type="submit" disabled={!title.trim()} className="btn btn-primary mt-1 w-full">
+            <Plus size={18} /> {t('add.cta')}
+          </button>
+        </form>
+      )}
     </Sheet>
   );
 }

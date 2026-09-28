@@ -61,19 +61,19 @@ export default function Reflection({ t, story, locale, species, onDone }) {
   return (
     <div className="reflect fade-in" role="dialog" aria-modal="true" aria-labelledby="reflect-h">
       <div ref={panel} tabIndex={-1} className="reflect-panel safe-top safe-bottom focus:outline-none">
-        <div className="flex flex-col items-center pt-6">
-          <CompanionArt species={species} mood={thanks ? 'happy' : 'calm'} size={112} />
-          <h2 id="reflect-h" className="mt-2 text-[13px] font-bold uppercase tracking-[0.12em] text-white/70">
+        <div className="flex flex-col items-start">
+          <CompanionArt species={species} mood={thanks ? 'happy' : 'calm'} size={72} />
+          <h2 id="reflect-h" className="t-label mt-3 text-white/60">
             {t('reflect.title')}
           </h2>
         </div>
         {thanks ? (
-          <p className="reflect-line mt-8 text-center text-xl font-bold" role="status">
+          <p className="reflect-line mt-8" role="status">
             {t('reflect.thanks')}
           </p>
         ) : (
           <>
-            <ol className="m-0 mt-5 list-none space-y-3 p-0">
+            <ol className="m-0 mt-6 list-none space-y-4 p-0">
               {lines.map((l, i) => (
                 <li key={i} className={`reflect-line ${shown > i ? 'on' : ''}`}>
                   {l}
@@ -81,8 +81,8 @@ export default function Reflection({ t, story, locale, species, onDone }) {
               ))}
             </ol>
             <div className={`reflect-ask ${shown > lines.length ? 'on' : ''}`}>
-              <p className="mb-3 mt-7 text-center text-lg font-extrabold">{t('reflect.ask')}</p>
-              <div className="flex flex-wrap justify-center gap-2" role="radiogroup" aria-label={t('reflect.ask')}>
+              <p className="t-label mb-3 mt-10 text-white/60">{t('reflect.ask')}</p>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t('reflect.ask')}>
                 {[...ANSWERS, 'other'].map((a) => (
                   <button
                     key={a}
@@ -108,14 +108,14 @@ export default function Reflection({ t, story, locale, species, onDone }) {
                   enterKeyHint="done"
                   aria-label={t('reflect.other')}
                   onKeyDown={(e) => e.key === 'Enter' && picked && finish(picked)}
-                  className="mt-3 h-12 w-full rounded-2xl bg-white/95 px-4 text-base text-ink placeholder:text-muted focus:outline-none"
+                  className="field mt-3"
                 />
               )}
-              <div className="mt-6 flex flex-col gap-2">
-                <button type="button" disabled={!picked} onClick={() => finish(picked)} className="h-12 rounded-2xl bg-white text-base font-bold text-primary-deep disabled:opacity-40">
+              <div className="mt-8 flex flex-col gap-2">
+                <button type="button" disabled={!picked} onClick={() => finish(picked)} className="btn btn-primary w-full">
                   {t('reflect.save')}
                 </button>
-                <button type="button" onClick={() => finish(null)} className="h-11 rounded-2xl text-sm font-semibold text-white/80">
+                <button type="button" onClick={() => finish(null)} className="btn btn-ghost w-full">
                   {t('reflect.skip')}
                 </button>
               </div>

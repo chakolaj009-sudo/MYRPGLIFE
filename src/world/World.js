@@ -129,7 +129,9 @@ export class World {
     cam.aspect = w / h;
     // Fit the island (~8.8 units) across, whatever the phone width.
     const hfov = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect);
-    const d = Math.max(13, 4.4 / Math.tan(hfov / 2));
+    // ...and keep the whole island (with its underside) in frame on wide screens.
+    const vfit = 6.5 / Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+    const d = Math.max(13, 4.4 / Math.tan(hfov / 2), vfit);
     const el = THREE.MathUtils.degToRad(17);
     cam.position.set(0, this.target.y + Math.sin(el) * d, Math.cos(el) * d);
     cam.lookAt(this.target);

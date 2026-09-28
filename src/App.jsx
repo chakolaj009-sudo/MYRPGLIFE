@@ -20,7 +20,7 @@ import Reflection from './components/Reflection.jsx';
 import SpeechBubble from './components/SpeechBubble.jsx';
 
 const EMPTY_DAY = { items: [], done: [] };
-const LEAVE_MS = 650;
+const LEAVE_MS = 420; // card exit (180ms) + slot collapse (240ms, overlapping)
 
 function greetingKey(h) {
   if (h < 5) return 'greet.night';
@@ -199,19 +199,6 @@ export default function App() {
     .join(',');
   const wear = useMemo(() => (wearKey ? wearKey.split(',') : []), [wearKey]);
 
-  // ---------------------------------------------------------------- a new friend (rare)
-  useEffect(() => {
-    const ids = newlyUnlocked(state, st);
-    if (!ids.length) return;
-    commit((s) => markSeen(s, ids));
-    ids.forEach((id, i) =>
-      setTimeout(() => {
-        const sp = id.slice(6);
-        toast({ icon: <CompanionArt species={sp} size={26} mood="happy" />, text: t('buddy.found', { name: t(`buddy.${sp}`) }) }, 4200);
-      }, 1600 + i * 900),
-    );
-  }, [state, st, commit, t, toast]);
-
   // ---------------------------------------------------------------- daily completion
   const doneRef = useRef(null);
   const wasAllDone = useRef(st.allDone);
@@ -254,6 +241,20 @@ export default function App() {
     setReflectWeek(null);
     setOpeningFor(today);
   };
+
+  // ---------------------------------------------------------------- a new friend (rare)
+  useEffect(() => {
+    if (reflectWeek) return; // wait until the weekly story is closed
+    const ids = newlyUnlocked(state, st);
+    if (!ids.length) return;
+    commit((s) => markSeen(s, ids));
+    ids.forEach((id, i) =>
+      setTimeout(() => {
+        const sp = id.slice(6);
+        toast({ icon: <CompanionArt species={sp} size={26} mood="happy" />, text: t('buddy.found', { name: t(`buddy.${sp}`) }) }, 4200);
+      }, 1600 + i * 900),
+    );
+  }, [state, st, commit, t, toast, reflectWeek]);
 
   useEffect(() => {
     if (openingFor !== today) return;
@@ -304,7 +305,12 @@ export default function App() {
   const header = state.name ? { hello: `${greet},`, title: state.name } : { hello: dateLabel, title: greet };
 
   const [sheet, setSheet] = useState(null); // 'settings' | 'week' | 'garden' | 'played' | 'add'
-  const close = useCallback(() => setSheet(null), []);
+  // A sheet unmounts after its exit animation; only clear it if no other sheet was opened meanwhile.
+  const closeFor = useMemo(() => {
+    const m = {};
+    for (const k of ['week', 'garden', 'played', 'add', 'settings']) m[k] = () => setSheet((cur) => (cur === k ? null : cur));
+    return m;
+  }, []);
   const handItems = day.items.filter((i) => !day.done.includes(i.id) || leaving[i.id]);
   const doneItems = day.items.filter((i) => day.done.includes(i.id) && !leaving[i.id]);
   const handAllDone = st.allDone && !Object.keys(leaving).length;
@@ -320,6 +326,7 @@ export default function App() {
         missions={missions}
         minimum={st.minimum}
         label={t('world.label')}
+        loadingLabel={t('world.loading')}
         onTapMission={(id) => play(id, null)}
         onTapCompanion={() => say(t(`say.tap.${Math.floor(Math.random() * 5)}`), 1500)}
         keepsakes={state.keepsakes}
@@ -364,30 +371,33 @@ export default function App() {
         doneCard={<DoneCard ref={doneRef} t={t} praise={praise} bonus={ALL_DONE_BONUS} month={st.month} species={state.buddy} />}
       />
 
+      <aside className="rail-extra" aria-label={t('week.title')}>
+        <p className="t-label mb-3">{t('week.title')}</p>
+        <WeekCard t={t} state={state} today={today} locale={locale} st={st} id="rail-week-h" />
+      </aside>
+
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
       {story && <Reflection t={t} story={story} locale={locale} species={state.buddy} onDone={closeReflection} />}
 
       {sheet === 'week' && (
-        <Sheet title={t('week.title')} onClose={close} t={t}>
-          <div className="mb-4">
+        <Sheet title={t('week.title')} onClose={closeFor.week} t={t}>
+          <div className="section">
             <WeekCard t={t} state={state} today={today} locale={locale} st={st} />
           </div>
-          <figure className="card m-0 mb-4 px-4 py-3.5">
-            <figcaption className="eyebrow mb-1">{t('quote.title')}</figcaption>
-            <blockquote className="m-0 text-[15px] leading-relaxed text-ink2">{quote}</blockquote>
+          <figure className="section m-0 mb-2">
+            <figcaption className="t-label mb-2">{t('quote.title')}</figcaption>
+            <blockquote className="quote t-body text-ink2">{quote}</blockquote>
           </figure>
         </Sheet>
       )}
       {sheet === 'garden' && (
-        <Sheet title={t('stats.title')} onClose={close} t={t}>
-          <div className="mb-4">
-            <GardenPanel t={t} st={st} moments={moments} />
-          </div>
+        <Sheet title={t('stats.title')} onClose={closeFor.garden} t={t}>
+          <GardenPanel t={t} st={st} moments={moments} />
         </Sheet>
       )}
-      {sheet === 'played' && <PlayedSheet t={t} items={doneItems} minimum={st.minimum} onUndo={undo} onClose={close} />}
-      {sheet === 'add' && <AddSheet t={t} onAdd={add} onClose={close} />}
+      {sheet === 'played' && <PlayedSheet t={t} items={doneItems} minimum={st.minimum} onUndo={undo} onClose={closeFor.played} />}
+      {sheet === 'add' && <AddSheet t={t} onAdd={add} onClose={closeFor.add} />}
       {sheet === 'settings' && (
         <SettingsSheet
           t={t}
@@ -396,7 +406,7 @@ export default function App() {
           onSave={(list) => commit((s, k) => setRoutines(s, k, list))}
           onLang={(v) => commit((s) => setLang(s, v))}
           onProfile={(p) => commit((s) => setProfile(s, p))}
-          onClose={close}
+          onClose={closeFor.settings}
         />
       )}
     </div>

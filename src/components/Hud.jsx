@@ -1,16 +1,21 @@
 import { forwardRef, useEffect, useRef, useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
-import { MissionIcon } from './Art.jsx';
-import Plant from './Plant.jsx';
 
-/** Level ring: the XP orbs fly into it. One JS tween drives the fill so it also works in Safari. */
-const LevelRing = forwardRef(function LevelRing({ t, level, ping }, ref) {
+/** Level meter: the XP orbs fly into it. One JS tween drives the fill so it also works in Safari. */
+const LevelStat = forwardRef(function LevelStat({ t, level, ping }, ref) {
   const target = level.into / level.need;
   const [pct, setPct] = useState(target);
   const cur = useRef(target);
   const prev = useRef(level.level);
   const raf = useRef(0);
   const box = useRef(null);
+  const pulse = (cls) => {
+    const el = box.current;
+    if (!el) return;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  };
   useEffect(() => {
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const tween = (to, ms, done) => {
@@ -27,96 +32,67 @@ const LevelRing = forwardRef(function LevelRing({ t, level, ping }, ref) {
       raf.current = requestAnimationFrame(step);
     };
     if (level.level > prev.current) {
-      tween(1, 600, () => {
+      tween(1, 360, () => {
         cur.current = 0;
         setPct(0);
-        box.current?.classList.remove('levelup');
-        void box.current?.offsetWidth;
-        box.current?.classList.add('levelup');
-        tween(target, 700);
+        pulse('levelup');
+        tween(target, 480);
       });
-    } else tween(target, 800);
+    } else tween(target, 480);
     prev.current = level.level;
     return () => cancelAnimationFrame(raf.current);
   }, [level.level, target]);
   useEffect(() => {
-    if (!ping || !box.current) return;
-    box.current.classList.remove('ring-ping');
-    void box.current.offsetWidth;
-    box.current.classList.add('ring-ping');
+    if (ping) pulse('ping');
   }, [ping]);
-  const R = 27;
-  const C = 2 * Math.PI * R;
   return (
     <div
       ref={box}
-      className="level-ring"
+      className="stat stat-level"
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={level.need}
       aria-valuenow={level.into}
       aria-label={t('xp', { a: level.into, b: level.need })}
     >
-      <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
-        <defs>
-          <linearGradient id="ringFill" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#A5B4FC" />
-            <stop offset="1" stopColor="#4F46E5" />
-          </linearGradient>
-        </defs>
-        <circle cx="32" cy="32" r={R} fill="none" stroke="rgb(99 102 241 / .16)" strokeWidth="6" />
-        <circle
-          cx="32"
-          cy="32"
-          r={R}
-          fill="none"
-          stroke="url(#ringFill)"
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeDasharray={`${Math.max(0.001, pct) * C} ${C}`}
-          transform="rotate(-90 32 32)"
-        />
-      </svg>
-      <span ref={ref} className="ring-core">
-        <small>{t('lv')}</small>
-        <b>{level.level}</b>
+      <span className="t-label">{t('stats.level')}</span>
+      <span className="t-data">
+        <b ref={ref} className="inline-block font-[650]">
+          {level.level}
+        </b>
+        <small className="num" dir="ltr">
+          {level.into}/{level.need}
+        </small>
+      </span>
+      <span className="meter" aria-hidden="true">
+        <span style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct))})` }} />
       </span>
     </div>
   );
 });
 
-const Hud = forwardRef(function Hud({ t, hello, title, level, ping, month, stage, stageLabel, onSettings, onMonth, onGrowth, boxRef }, ringRef) {
+const Hud = forwardRef(function Hud({ t, hello, title, level, ping, month, stageLabel, onSettings, onMonth, onGrowth, boxRef }, ringRef) {
   const days = month === 0 ? t('chip.begin') : month === 1 ? t('chip.days1') : t('chip.days', { n: month });
   return (
     <header ref={boxRef} className="hud">
-      <div className="flex items-start gap-3">
+      <div className="hud-top">
         <div className="min-w-0 flex-1">
-          <p className="hud-hello">{hello}</p>
-          <h1 className="hud-title truncate">{title}</h1>
+          <p className="t-label hud-date truncate">{hello}</p>
+          <h1 className="t-display hud-title truncate">{title}</h1>
         </div>
-        <button type="button" className="glass-btn" onClick={onSettings} aria-label={t('settings.open')}>
-          <SlidersHorizontal size={20} />
+        <button type="button" className="icon-btn" onClick={onSettings} aria-label={t('settings.open')}>
+          <SlidersHorizontal size={18} strokeWidth={2} />
         </button>
       </div>
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <button type="button" className="glass-chip" onClick={onMonth} aria-label={`${t('chip.month')}: ${days}`}>
-          <span className="chip-ico" style={{ background: 'linear-gradient(180deg,#FFF7E0,#FFE9B8)' }}>
-            <MissionIcon kind="sun" size={26} />
-          </span>
-          <span className="flex flex-col items-start leading-tight">
-            <b>{days}</b>
-            <small>{t('chip.month')}</small>
-          </span>
+      <div className="status">
+        <button type="button" className="stat" onClick={onMonth} aria-label={`${t('chip.month')}: ${days}`}>
+          <span className="t-label">{t('chip.month')}</span>
+          <span className="t-data">{days}</span>
         </button>
-        <LevelRing ref={ringRef} t={t} level={level} ping={ping} />
-        <button type="button" className="glass-chip" onClick={onGrowth} aria-label={`${t('chip.growth')}: ${stageLabel}`}>
-          <span className="chip-ico" style={{ background: 'linear-gradient(180deg,#EAFBF1,#CFF3DD)' }}>
-            <Plant stage={stage} size={24} soil={false} />
-          </span>
-          <span className="flex min-w-0 flex-col items-start leading-tight">
-            <b className="max-w-[96px] leading-[1.1]">{stageLabel}</b>
-            <small>{t('chip.growth')}</small>
-          </span>
+        <LevelStat ref={ringRef} t={t} level={level} ping={ping} />
+        <button type="button" className="stat" onClick={onGrowth} aria-label={`${t('chip.growth')}: ${stageLabel}`}>
+          <span className="t-label">{t('chip.growth')}</span>
+          <span className="t-data">{stageLabel}</span>
         </button>
       </div>
     </header>

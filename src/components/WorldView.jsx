@@ -14,7 +14,7 @@ const STARS = Array.from({ length: 34 }, (_, i) => [(i * 37) % 100, (i * 53) % 5
  * Full-bleed 3D island. `missions` = [{ id, kind, done }].
  * Imperative API via ref: play(id), undo(id), focus(id), react(), celebrate(), screenPoint(id).
  */
-const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, missions, keepsakes = [], minimum = false, offset = 0.13, onTapMission, onTapCompanion, onTapKeepsake, label }, ref) {
+const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, missions, keepsakes = [], minimum = false, offset = 0.13, onTapMission, onTapCompanion, onTapKeepsake, label, loadingLabel }, ref) {
   const host = useRef(null);
   const world = useRef(null);
   const [fallback, setFallback] = useState(false);
@@ -22,6 +22,15 @@ const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, m
   cb.current = { onTapMission, onTapCompanion, onTapKeepsake };
 
   const [ready, setReady] = useState(false);
+  // On wide screens the task list sits beside the world, not over it.
+  const [wide, setWide] = useState(() => !!window.matchMedia?.('(min-width: 960px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(min-width: 960px)');
+    const on = (e) => setWide(e.matches);
+    mq?.addEventListener?.('change', on);
+    return () => mq?.removeEventListener?.('change', on);
+  }, []);
+  if (wide) offset = 0.02;
   const latest = useRef({});
   latest.current = { offset, phase, stage, species, wear, missions, minimum, keepsakes };
 
@@ -78,7 +87,7 @@ const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, m
   }));
 
   return (
-    <div className="absolute inset-0 overflow-hidden" style={{ background: SKY[phase] || SKY.day }} role="img" aria-label={label}>
+    <div className="world-stage" style={{ background: SKY[phase] || SKY.day }} role="img" aria-label={label}>
       {phase === 'night' &&
         STARS.map(([x, y, r, d], i) => (
           <span key={i} className="twinkle absolute rounded-full bg-white" style={{ left: `${x}%`, top: `${y}%`, width: r, height: r, animationDelay: `${d}s` }} />
@@ -94,7 +103,15 @@ const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, m
           }}
         />
       )}
-      <div ref={host} className={`absolute inset-0 transition-opacity duration-700 ${ready ? 'opacity-100' : 'opacity-0'}`} />
+      <div ref={host} className={`absolute inset-0 transition-opacity duration-500 ${ready ? 'opacity-100' : 'opacity-0'}`} />
+      {!ready && !fallback && (
+        <p className="world-loading t-meta" role="status">
+          <i />
+          <i />
+          <i />
+          <span className="ms-1">{loadingLabel}</span>
+        </p>
+      )}
       {fallback && (
         <div className="absolute inset-x-0 top-[26%] flex justify-center">
           <CompanionArt species={species} wear={wear} size={170} />
