@@ -284,3 +284,35 @@ describe('growth stages, levels, medals & companions', () => {
     expect(M.setProfile(s, { name: '', buddy: 'luma' })).toMatchObject({ name: null, buddy: 'luma' });
   });
 });
+
+describe('growth appears overnight and never wilts', () => {
+  it('today plants, tomorrow reveals', () => {
+    let s = withDays({ '2026-09-27': 1 }); // r-teeth once
+    let g = M.worldGrowth(s, '2026-09-27');
+    expect(g['r-teeth']).toEqual({ visible: 0, pending: true });
+    g = M.worldGrowth(M.prepareDay(s, '2026-09-28').state, '2026-09-28');
+    expect(g['r-teeth']).toEqual({ visible: 1, pending: false });
+  });
+  it('discoveries are shown once, then remembered', () => {
+    let s = withDays({ '2026-09-26': 1, '2026-09-27': 1, '2026-09-28': 1 });
+    s = M.prepareDay(s, '2026-09-29').state;
+    expect(M.discoveries(s, '2026-09-29')).toEqual(['r-teeth']);
+    s = M.markGrown(s, '2026-09-29');
+    expect(s.grown['r-teeth']).toBe(2); // 3 completions → tier 2
+    expect(M.discoveries(s, '2026-09-29')).toEqual([]);
+  });
+  it('coming back after days away reveals what grew from the last visit', () => {
+    let s = withDays({ '2026-09-20': 4 });
+    s = M.markGrown(M.prepareDay(s, '2026-09-20').state, '2026-09-20'); // seen nothing yet
+    s = M.prepareDay(s, '2026-09-24').state; // back after 3 days
+    expect(M.discoveries(s, '2026-09-24').sort()).toEqual(['r-bed', 'r-mind', 'r-read', 'r-teeth']);
+  });
+  it('seen growth never goes down, even if today is unchecked', () => {
+    let s = withDays({ '2026-09-27': 1 });
+    s = M.markGrown(M.prepareDay(s, '2026-09-28').state, '2026-09-28');
+    s = M.toggleItem(s, '2026-09-28', 'r-teeth');
+    s = M.toggleItem(s, '2026-09-28', 'r-teeth');
+    expect(s.grown['r-teeth']).toBe(1);
+    expect(M.worldGrowth(s, '2026-09-28')['r-teeth'].visible).toBe(1);
+  });
+});

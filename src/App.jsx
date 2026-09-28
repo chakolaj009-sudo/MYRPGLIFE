@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useStore } from './lib/useStore.js';
-import { detectLang, makeT, QUOTES, safeLocale } from './lib/i18n.js';
+import { detectLang, itemTitle, makeT, QUOTES, safeLocale } from './lib/i18n.js';
 import { dayNumber, keyToLocalDate } from './domain/dates.js';
 import {
-  addCustom, ALL_DONE_BONUS, levelFromXp, markSeen, newlyUnlocked, removeItem, setLang, setMinimum, setProfile, setRoutines, stats, toggleItem,
-  WARDROBE, xpPerTask,
+  addCustom, ALL_DONE_BONUS, discoveries, levelFromXp, markGrown, markSeen, newlyUnlocked, removeItem, setLang, setMinimum, setProfile, setRoutines, stats,
+  toggleItem, WARDROBE, worldGrowth, xpPerTask,
 } from './domain/model.js';
 import { flyXp, floatText, prefersReducedMotion, sparkleBurst, haptic } from './lib/fx.js';
 import { phaseFor } from './lib/ambient.js';
@@ -148,10 +148,23 @@ export default function App() {
   }, [commit]);
 
   // World objects mirror today's missions; a mission stays "to do" in the
-  // world until the companion has walked over and done it.
+  // world until the companion has walked over and done it. Each habit's
+  // growth shows what the user has already discovered until the reveal.
+  const growth = useMemo(() => worldGrowth(state, today), [state, today]);
+  const [revealed, setRevealed] = useState(false);
   const missions = useMemo(
-    () => day.items.map((i) => ({ id: i.id, kind: worldKind(i), done: day.done.includes(i.id) && !walking[i.id] })),
-    [day, walking],
+    () =>
+      day.items.map((i) => {
+        const g = growth[i.id] || { visible: 0, pending: false };
+        return {
+          id: i.id,
+          kind: worldKind(i),
+          done: day.done.includes(i.id) && !walking[i.id],
+          tier: revealed ? g.visible : Math.min(g.visible, state.grown[i.id] || 0),
+          pending: g.pending,
+        };
+      }),
+    [day, walking, growth, revealed, state.grown],
   );
 
   // ---------------------------------------------------------------- level-ups: the companion finds outfit pieces
@@ -199,19 +212,36 @@ export default function App() {
     if (!st.allDone) wasAllDone.current = false;
   }, [st.allDone, walkingNow, say, t]);
 
-  // ---------------------------------------------------------------- opening line + thought of the day
+  // ---------------------------------------------------------------- opening: hello → what grew → thought of the day
   // After a gap: one gentle line, nothing about what was missed.
   const n = dayNumber(today);
   const quotes = QUOTES[lang] || QUOTES.en;
   const quote = quotes[((n % quotes.length) + quotes.length) % quotes.length];
+  const latest = useRef({});
+  latest.current = { state, today, st };
   useEffect(() => {
-    const first = st.comeback && !st.todayDone ? t('say.comeback') : st.allDone ? t('say.allDone') : st.todayDone ? t('say.back') : t('say.tap.3');
-    const a = setTimeout(() => say(first, st.comeback ? 4200 : 2200), 900);
-    const b = st.comeback ? 0 : setTimeout(() => say(t('bubble.quote', { q: quote }), 5200), 3400);
-    return () => {
-      clearTimeout(a);
-      clearTimeout(b);
-    };
+    setRevealed(false);
+    const timers = [];
+    const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+    const { st: s0 } = latest.current;
+    const first = s0.comeback && !s0.todayDone ? t('say.comeback') : s0.allDone ? t('say.allDone') : s0.todayDone ? t('say.back') : t('say.tap.3');
+    at(900, () => say(first, s0.comeback ? 3600 : 2000));
+    at(s0.comeback ? 4600 : 3100, () => {
+      const { state: s, today: k } = latest.current;
+      const found = discoveries(s, k).filter((id) => s.days[k]?.items.some((i) => i.id === id));
+      setRevealed(true);
+      if (found.length) {
+        const item = s.days[k].items.find((i) => i.id === found[0]);
+        world.current?.focus(found[0]);
+        say(found.length > 1 ? t('grow.foundMany') : t('grow.found', { habit: itemTitle(t, item) }), 3400);
+        commit((x, kk) => markGrown(x, kk));
+        at(3800, () => !s0.comeback && say(t('bubble.quote', { q: quote }), 5200));
+      } else {
+        commit((x, kk) => markGrown(x, kk));
+        if (!s0.comeback) say(t('bubble.quote', { q: quote }), 5200);
+      }
+    });
+    return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 

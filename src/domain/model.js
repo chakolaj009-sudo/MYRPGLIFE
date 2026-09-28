@@ -370,10 +370,11 @@ export function showedUpInMonth(state, today) {
   return Object.keys(state.days).filter((k) => k.startsWith(prefix) && k <= today && isActive(state.days[k])).length;
 }
 
-/** Lifetime completions per habit id (routines and custom tasks alike). */
-export function habitCounts(state) {
+/** Lifetime completions per habit id (routines and custom tasks alike). `before` excludes that day and later. */
+export function habitCounts(state, before = null) {
   const counts = { ...state.archive.habits };
-  for (const d of Object.values(state.days)) {
+  for (const [k, d] of Object.entries(state.days)) {
+    if (before && k >= before) continue;
     const ids = new Set(d.items.map((i) => i.id));
     for (const id of d.done) if (ids.has(id)) counts[id] = (counts[id] || 0) + 1;
   }
@@ -382,6 +383,43 @@ export function habitCounts(state) {
 
 export function growthTier(count) {
   return GROWTH_STEPS.filter((n) => count >= n).length;
+}
+
+/**
+ * Growth in the world reflects cumulative history and appears overnight:
+ * what you do today is "planted" and shows up the next time a day begins.
+ * Nothing ever wilts — tiers only go up with lifetime completions.
+ *   visible: tier revealed in the world (history before today)
+ *   pending: something new will grow tomorrow from today's completions
+ */
+export function worldGrowth(state, today) {
+  const before = habitCounts(state, today);
+  const all = habitCounts(state);
+  const out = {};
+  for (const id of new Set([...Object.keys(all), ...Object.keys(before)])) {
+    const visible = growthTier(before[id] || 0);
+    out[id] = { visible, pending: growthTier(all[id] || 0) > visible };
+  }
+  return out;
+}
+
+/** Habits whose revealed growth the user hasn't seen yet (the "something new grew" moment). */
+export function discoveries(state, today) {
+  const g = worldGrowth(state, today);
+  return Object.keys(g).filter((id) => g[id].visible > (state.grown[id] || 0));
+}
+
+export function markGrown(state, today) {
+  const g = worldGrowth(state, today);
+  const grown = { ...state.grown };
+  let changed = false;
+  for (const [id, v] of Object.entries(g)) {
+    if (v.visible > (grown[id] || 0)) {
+      grown[id] = v.visible;
+      changed = true;
+    }
+  }
+  return changed ? { ...state, grown } : state;
 }
 
 // ---------------------------------------------------------------------------

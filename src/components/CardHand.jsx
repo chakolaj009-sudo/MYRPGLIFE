@@ -27,7 +27,7 @@ function Card({ item, t, onPlay, onRemove, leaving, index, minimum, xp }) {
   const [tilt, setTilt] = useState({ x: 0, y: 0, lift: 0, glare: 50 });
   const drag = useRef(null);
   const el = useRef(null);
-  const flicked = useRef(0);
+  const flicked = useRef(-Infinity); // time of the last flick-to-play (guards the click that follows it)
   const [c1, c2, ink] = themeFor(item.icon || (item.kind === 'custom' ? 'star' : 'sprout'));
   const reduce = prefersReducedMotion();
 

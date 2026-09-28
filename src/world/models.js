@@ -85,7 +85,8 @@ export function buildIsland(phase) {
   const pine = mat(night ? '#2F5B4C' : '#3F8C63', { flat: true });
   const pine2 = mat(night ? '#3B6B55' : '#58A873', { flat: true });
   const trunk = mat('#8A5A3C');
-  const spots = [[-3.3, -1.6, 1.1], [-3.5, -0.4, 0.8], [3.4, -1.3, 1.2], [3.1, -2.3, 0.9], [-2.6, -2.8, 0.95], [2.2, -3.1, 0.8], [-3.6, 0.9, 0.7], [3.6, 0.3, 0.75]];
+  // A few pines at the back; the rest of the island is left for what the user grows.
+  const spots = [[-3.1, -2.0, 1.05], [3.2, -1.8, 1.1], [-2.3, -3.1, 0.9], [2.1, -3.2, 0.8]];
   spots.forEach(([x, z, s], i) => {
     const t = new THREE.Group();
     t.add(mesh(cyl(0.08, 0.1, 0.35, 8), trunk, { y: 0.17 }));
@@ -413,7 +414,197 @@ export function buildCompanion(species = 'moji', wear = []) {
     if (species === 'moji') add(sphere(0.08, 12, 8), mat('#FFFFFF'), { y: headTop + 0.17 });
   }
   if (wear.includes('cape')) {
-    add(new THREE.CylinderGeometry(0.5, 0.72, 0.85, 24, 1, true, Math.PI * 0.62, Math.PI * 0.76), mat('#4F46E5', { side: THREE.DoubleSide }), { y: 0.5 });
+    add(new THREE.CylinderGeometry(0.46, 0.6, 0.7, 24, 1, true, Math.PI * 0.7, Math.PI * 0.6), mat('#4F46E5', { side: THREE.DoubleSide }), { y: 0.45 });
   }
   return root;
+}
+
+// ---------------------------------------------------------------- growth from real habits
+// Each habit grows its own little corner. `tier` 1..6 is cumulative; every
+// piece is tagged with the tier that added it so new ones can pop in.
+// Local frame: +z points outward to the island rim, x runs along it.
+
+function tagged(tier, obj) {
+  obj.userData.tier = tier;
+  return obj;
+}
+function flower(x, z, petal, heart = '#FDE68A', h = 0.16) {
+  const g = new THREE.Group();
+  g.add(mesh(cyl(0.012, 0.012, h, 5), mat('#3E9467'), { y: h / 2, shadow: false }));
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    g.add(mesh(sphere(0.035, 8, 6), mat(petal), { x: Math.cos(a) * 0.04, y: h, z: Math.sin(a) * 0.04, shadow: false }));
+  }
+  g.add(mesh(sphere(0.028, 8, 6), mat(heart), { y: h + 0.01, shadow: false }));
+  g.position.set(x, 0, z);
+  return g;
+}
+function roundTree(x, z, s = 1, crown = '#4FAE7C', bloom = null) {
+  const g = new THREE.Group();
+  g.add(mesh(cyl(0.05 * s, 0.07 * s, 0.5 * s, 8), mat('#9A6B4F'), { y: 0.25 * s }));
+  g.add(mesh(sphere(0.3 * s, 14, 10), mat(crown), { y: 0.65 * s }));
+  g.add(mesh(sphere(0.2 * s, 12, 8), mat('#8ED3A8'), { x: 0.14 * s, y: 0.78 * s, z: 0.08 * s }));
+  if (bloom) for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    g.add(mesh(sphere(0.045 * s, 8, 6), mat(bloom), { x: Math.cos(a) * 0.27 * s, y: 0.66 * s + Math.sin(i * 1.7) * 0.12 * s, z: Math.sin(a) * 0.27 * s, shadow: false }));
+  }
+  g.position.set(x, 0, z);
+  return g;
+}
+function bookStack(x, z, colors) {
+  const g = new THREE.Group();
+  colors.forEach((c, i) => g.add(mesh(box(0.26, 0.06, 0.19), mat(c), { y: 0.03 + i * 0.062, ry: (i % 2 ? 0.25 : -0.15) })));
+  g.position.set(x, 0, z);
+  return g;
+}
+function lamp(x, z, glow = '#FEF3C7') {
+  const g = new THREE.Group();
+  g.add(mesh(cyl(0.02, 0.03, 0.7, 6), mat('#475569'), { y: 0.35 }));
+  g.add(mesh(cyl(0.07, 0.12, 0.12, 12), mat('#FDE68A', { emissive: '#FBBF24', ei: 0.6 }), { y: 0.72 }));
+  g.add(mesh(sphere(0.05, 10, 8), mat(glow, { emissive: '#FBBF24', ei: 1.2 }), { y: 0.66, shadow: false }));
+  g.position.set(x, 0, z);
+  return g;
+}
+
+export function buildGrowth(kind, tier) {
+  const g = new THREE.Group();
+  if (tier <= 0) return g;
+  const add = (t, obj) => t <= tier && g.add(tagged(t, obj));
+  switch (kind) {
+    case 'book': {
+      add(1, bookStack(0.7, 0.25, ['#6366F1', '#F472B6']));
+      add(2, bookStack(0.95, 0.5, ['#10B981', '#FBBF24', '#8B5CF6']));
+      const shelf = new THREE.Group();
+      shelf.add(mesh(box(0.55, 0.62, 0.2), mat('#9A6B4F'), { y: 0.31 }));
+      shelf.add(mesh(box(0.49, 0.03, 0.18), mat('#7C543D'), { y: 0.32, z: 0.02 }));
+      ['#EF4444', '#3B82F6', '#FBBF24', '#10B981', '#8B5CF6'].forEach((c, i) => shelf.add(mesh(box(0.07, 0.2, 0.14), mat(c), { x: -0.18 + i * 0.09, y: 0.44, z: 0.03 })));
+      shelf.position.set(-0.85, 0, 0.35);
+      shelf.rotation.y = 0.5;
+      add(3, shelf);
+      add(4, lamp(1.05, 0.05));
+      const plant = new THREE.Group();
+      plant.add(mesh(cyl(0.06, 0.05, 0.08, 10), mat('#C2410C'), { y: 0.66 }));
+      plant.add(mesh(sphere(0.08, 10, 8), mat('#4ADE80'), { y: 0.75 }));
+      plant.position.set(-0.85, 0, 0.35);
+      add(5, plant);
+      const chair = new THREE.Group();
+      chair.add(mesh(box(0.42, 0.16, 0.36), mat('#F472B6'), { y: 0.14 }));
+      chair.add(mesh(box(0.42, 0.34, 0.1), mat('#EC4899'), { y: 0.3, z: -0.15 }));
+      chair.add(mesh(box(0.08, 0.22, 0.36), mat('#DB2777'), { x: -0.21, y: 0.2 }));
+      chair.add(mesh(box(0.08, 0.22, 0.36), mat('#DB2777'), { x: 0.21, y: 0.2 }));
+      chair.position.set(0.15, 0, 0.95);
+      chair.rotation.y = Math.PI;
+      add(6, chair);
+      break;
+    }
+    case 'walk': {
+      const stone = mat('#E8E4F4');
+      const stones = (pts) => {
+        const s = new THREE.Group();
+        pts.forEach(([x, z]) => s.add(mesh(cyl(0.12, 0.13, 0.04, 9), stone, { x, y: 0.02, z, sx: 1.3 })));
+        return s;
+      };
+      add(1, stones([[0, 0.55], [0.1, 0.85], [0, 1.12]]));
+      add(2, stones([[0.4, 0.3], [0.72, 0.25], [-0.4, 0.35], [-0.72, 0.3]]));
+      add(3, roundTree(-0.75, 0.75, 0.9));
+      add(4, roundTree(0.85, 0.7, 0.75, '#3E9467'));
+      const border = new THREE.Group();
+      [[-0.25, 0.7], [0.3, 0.95], [-0.2, 1.05], [0.35, 0.55], [-0.45, 0.55]].forEach(([x, z], i) => border.add(flower(x, z, ['#FBCFE8', '#FDE68A', '#C4B5FD', '#FFFFFF', '#BFDBFE'][i])));
+      add(5, border);
+      const sign = new THREE.Group();
+      sign.add(mesh(cyl(0.025, 0.025, 0.55, 6), mat('#9A6B4F'), { y: 0.27 }));
+      sign.add(mesh(box(0.3, 0.12, 0.03), mat('#FDE68A'), { x: 0.08, y: 0.48 }));
+      sign.position.set(-0.3, 0, 1.1);
+      add(6, sign);
+      break;
+    }
+    case 'water': {
+      add(1, mesh(cyl(0.28, 0.28, 0.02, 20), mat('#93C5FD', { opacity: 0.9 }), { x: 0.7, y: 0.012, z: 0.35, shadow: false }));
+      add(2, mesh(cyl(0.5, 0.5, 0.02, 24), mat('#60A5FA', { opacity: 0.9 }), { x: 0.75, y: 0.014, z: 0.5, sz: 0.8, shadow: false }));
+      const pads = new THREE.Group();
+      [[0.6, 0.45], [0.9, 0.6], [0.75, 0.25]].forEach(([x, z]) => pads.add(mesh(cyl(0.08, 0.08, 0.01, 12), mat('#4ADE80'), { x, y: 0.03, z, shadow: false })));
+      pads.add(flower(0.9, 0.6, '#F9A8D4', '#FDE68A', 0.05));
+      add(3, pads);
+      const reeds = new THREE.Group();
+      for (let i = 0; i < 6; i++) reeds.add(mesh(cyl(0.012, 0.015, 0.35 + (i % 3) * 0.08, 5), mat('#3E9467'), { x: 1.2 + (i % 3) * 0.06, y: 0.18, z: 0.35 + i * 0.07, rz: (i % 2 ? 0.1 : -0.1) }));
+      add(4, reeds);
+      const ring = new THREE.Group();
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        ring.add(mesh(new THREE.DodecahedronGeometry(0.06, 0), mat('#CFCBE8', { flat: true }), { x: 0.75 + Math.cos(a) * 0.55, y: 0.04, z: 0.5 + Math.sin(a) * 0.44 }));
+      }
+      add(5, ring);
+      const frog = new THREE.Group();
+      frog.add(mesh(sphere(0.07, 12, 8), mat('#22C55E'), { y: 0.06, sy: 0.75 }));
+      [-1, 1].forEach((d) => frog.add(mesh(sphere(0.025, 8, 6), mat('#FFFFFF'), { x: d * 0.035, y: 0.11, z: 0.03, shadow: false })));
+      frog.position.set(0.6, 0.02, 0.45);
+      add(6, frog);
+      break;
+    }
+    case 'lotus':
+    case 'wind': {
+      const cairn = (n) => {
+        const c = new THREE.Group();
+        for (let i = 0; i < n; i++) c.add(mesh(sphere(0.1 - i * 0.012, 10, 8), mat(['#CFCBE8', '#B8B2DC', '#E3E0F2', '#A9A3D3', '#D9D5EE'][i]), { y: 0.06 + i * 0.1, sy: 0.55 }));
+        return c;
+      };
+      const c1 = cairn(3);
+      c1.position.set(0.7, 0, 0.3);
+      add(1, c1);
+      const c2 = cairn(5);
+      c2.position.set(-0.7, 0, 0.45);
+      add(2, c2);
+      const bonsai = new THREE.Group();
+      bonsai.add(mesh(box(0.28, 0.08, 0.18), mat('#475569'), { y: 0.04 }));
+      bonsai.add(mesh(cyl(0.025, 0.04, 0.25, 6), mat('#7C543D'), { y: 0.2, rz: 0.3 }));
+      bonsai.add(mesh(sphere(0.12, 10, 8), mat('#4FAE7C'), { x: 0.06, y: 0.34, sy: 0.6 }));
+      bonsai.add(mesh(sphere(0.09, 10, 8), mat('#8ED3A8'), { x: -0.07, y: 0.3, sy: 0.6 }));
+      bonsai.position.set(0.95, 0, 0.75);
+      add(3, bonsai);
+      const chime = new THREE.Group();
+      chime.add(mesh(cyl(0.02, 0.02, 0.8, 6), mat('#9A6B4F'), { y: 0.4 }));
+      chime.add(mesh(box(0.3, 0.02, 0.02), mat('#9A6B4F'), { x: 0.12, y: 0.78 }));
+      for (let i = 0; i < 3; i++) chime.add(mesh(cyl(0.012, 0.012, 0.16 + i * 0.04, 6), mat('#E0E7FF', { emissive: '#A5B4FC', ei: 0.4 }), { x: 0.05 + i * 0.08, y: 0.66 - i * 0.02 }));
+      chime.name = 'chime';
+      chime.position.set(-1.0, 0, 0.05);
+      add(4, chime);
+      const sand = new THREE.Group();
+      sand.add(mesh(cyl(0.42, 0.42, 0.015, 28), mat('#F5E9D6'), { y: 0.01, shadow: false }));
+      [0.18, 0.3].forEach((r) => sand.add(mesh(new THREE.TorusGeometry(r, 0.008, 4, 36), mat('#E2CFB0'), { y: 0.02, rx: Math.PI / 2, shadow: false })));
+      sand.position.set(-0.1, 0, 0.95);
+      add(5, sand);
+      const glow = new THREE.Group();
+      glow.add(mesh(cyl(0.08, 0.1, 0.18, 8), mat('#CFCBE8', { flat: true }), { y: 0.09 }));
+      glow.add(mesh(sphere(0.07, 10, 8), mat('#FDF4FF', { emissive: '#F0ABFC', ei: 1 }), { y: 0.24, shadow: false }));
+      glow.position.set(-0.1, 0, 0.95);
+      add(6, glow);
+      break;
+    }
+    default: {
+      const tint = { tooth: '#BFDBFE', bed: '#DDD6FE', sun: '#FDE68A', breakfast: '#FED7AA', shower: '#C4B5FD', moon: '#C7D2FE', heart: '#FBCFE8', sprout: '#BBF7D0', star: '#FEF08A' }[kind] || '#FBCFE8';
+      const f1 = new THREE.Group();
+      [[0.6, 0.3], [0.75, 0.55], [0.5, 0.6]].forEach(([x, z]) => f1.add(flower(x, z, tint)));
+      add(1, f1);
+      const bush = new THREE.Group();
+      bush.add(mesh(sphere(0.18, 12, 8), mat('#4FAE7C'), { y: 0.12, sy: 0.75 }));
+      bush.add(mesh(sphere(0.13, 10, 8), mat('#8ED3A8'), { x: 0.14, y: 0.1, z: 0.05, sy: 0.75 }));
+      bush.position.set(-0.7, 0, 0.35);
+      add(2, bush);
+      add(3, roundTree(-0.85, 0.85, 0.8));
+      add(4, lamp(0.95, 0.15));
+      const f2 = new THREE.Group();
+      [[-0.2, 0.9], [0.1, 1.05], [0.35, 0.85], [-0.45, 0.65]].forEach(([x, z], i) => f2.add(flower(x, z, i % 2 ? tint : '#FFFFFF')));
+      add(5, f2);
+      add(6, roundTree(0.95, 0.85, 1.05, '#3E9467', '#F9A8D4'));
+    }
+  }
+  return g;
+}
+
+/** A tiny glowing bud: something will grow here tomorrow. */
+export function buildBud() {
+  const g = new THREE.Group();
+  g.add(mesh(cyl(0.012, 0.012, 0.12, 5), mat('#4ADE80'), { y: 0.06, shadow: false }));
+  g.add(mesh(sphere(0.045, 10, 8), mat('#BBF7D0', { emissive: '#4ADE80', ei: 0.9 }), { y: 0.14, sy: 1.3, shadow: false }));
+  return g;
 }

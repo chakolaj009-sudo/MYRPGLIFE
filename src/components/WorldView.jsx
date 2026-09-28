@@ -79,7 +79,7 @@ const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, m
         STARS.map(([x, y, r, d], i) => (
           <span key={i} className="twinkle absolute rounded-full bg-white" style={{ left: `${x}%`, top: `${y}%`, width: r, height: r, animationDelay: `${d}s` }} />
         ))}
-      {phase === 'night' && <span className="absolute right-[14%] top-[13%] h-9 w-9 rounded-full" style={{ boxShadow: 'inset -9px 5px 0 0 #F5F3FF', filter: 'drop-shadow(0 0 12px rgb(199 210 254 / .7))' }} />}
+      {phase === 'night' && <span className="absolute right-[12%] top-[43%] h-9 w-9 rounded-full" style={{ boxShadow: 'inset -9px 5px 0 0 #F5F3FF', filter: 'drop-shadow(0 0 12px rgb(199 210 254 / .7))' }} />}
       {(phase === 'day' || phase === 'dawn' || phase === 'evening') && (
         <span
           className="absolute h-64 w-64 rounded-full"

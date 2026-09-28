@@ -252,6 +252,31 @@ await check('Minimum day toggle: tiny versions, softer world, counts fully', asy
   assert(Object.values(s.days)[0].minimum === undefined, 'toggle off persisted');
 });
 
+await check('growth appears overnight: planted today, discovered next open', async (page, ctx) => {
+  await page.clock.install({ time: new Date('2026-09-26T09:00:00+03:00') });
+  await page.goto(URL + '?debug');
+  await worldReady(page);
+  await settle(page, 1200);
+  await cards(page).first().click(); // first ever completion of this habit
+  await settle(page, 3000);
+  const id = (await state(page)).days['2026-09-26'].done[0];
+  assert(await page.evaluate((id) => window.__world.objects.get(id).bud.visible, id), 'a bud should show something was planted');
+  assert(await page.evaluate((id) => window.__world.objects.get(id).tier, id) === 0, 'growth must not appear the same day');
+  await page.close();
+  const p2 = await ctx.newPage();
+  await p2.clock.install({ time: new Date('2026-09-27T09:00:00+03:00') });
+  await p2.goto(URL + '?debug');
+  await worldReady(p2);
+  await p2.clock.runFor(4500); // the opening sequence: hello → what grew
+  await p2.getByText(/something new grew/).waitFor({ timeout: 10000 });
+  assert(await p2.evaluate((id) => window.__world.objects.get(id).tier, id) === 1, 'new growth revealed');
+  assert((await state(p2)).grown[id] === 1, 'discovery remembered');
+  await p2.reload();
+  await worldReady(p2);
+  await p2.clock.runFor(6000);
+  assert(!(await p2.getByText(/something new grew/).count()), 'discovery is shown only once');
+});
+
 await check('imports legacy Life RPG data and keeps the old keys', async (page) => {
   await page.addInitScript(() => {
     if (!localStorage.getItem('arch_record_v1'))

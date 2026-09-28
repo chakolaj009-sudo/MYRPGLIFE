@@ -504,7 +504,7 @@ button {
   text-align: start;
 }
 [dir='rtl'] .glass-chip { padding: 5px 5px 5px 12px; }
-.glass-chip b { font-size: 13.5px; font-weight: 800; letter-spacing: -0.01em; }
+.glass-chip b { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; }
 .glass-chip small { font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #8a90ad; }
 .chip-ico { width: 40px; height: 40px; flex: none; border-radius: 13px; display: grid; place-items: center; }
 .night .glass-btn, .night .glass-chip { background: rgb(30 34 80 / 0.55); color: #fff; box-shadow: 0 1px 0 rgb(255 255 255 / 0.12) inset, 0 8px 20px rgb(0 0 0 / 0.3); }

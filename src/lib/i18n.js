@@ -61,6 +61,8 @@ const en = {
   'say.back': 'Welcome back ✨',
   'say.comeback': "You're here. That's the whole thing.",
   'bubble.quote': '“{q}”',
+  'grow.found': 'Look — something new grew by “{habit}”.',
+  'grow.foundMany': 'Look — new things grew on your island.',
 
   'chip.month': 'This month',
   'chip.days': '{n} days',
@@ -210,6 +212,8 @@ const he = {
   'say.back': 'ברוך שובך ✨',
   'say.comeback': 'את/ה כאן. זה כל מה שצריך.',
   'bubble.quote': '“{q}”',
+  'grow.found': 'תראו — משהו חדש צמח ליד „{habit}”.',
+  'grow.foundMany': 'תראו — דברים חדשים צמחו על האי שלך.',
 
   'chip.month': 'החודש',
   'chip.days': '{n} ימים',

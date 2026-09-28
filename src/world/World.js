@@ -2,7 +2,7 @@
 // fast: one renderer, soft shadows from a single sun, pooled particles.
 // React talks to it through a tiny imperative API (see bottom of class).
 import * as THREE from 'three';
-import { buildCloud, buildCompanion, buildGrowthTree, buildIsland, buildMarker, buildMiniIsland, buildMissionObject, buildRing, mat } from './models.js';
+import { buildBud, buildCloud, buildCompanion, buildGrowth, buildGrowthTree, buildIsland, buildMarker, buildMiniIsland, buildMissionObject, buildRing, mat } from './models.js';
 
 const TAU = Math.PI * 2;
 const easeOut = (k) => 1 - Math.pow(1 - k, 3);
@@ -256,7 +256,7 @@ export class World {
     if (changed && !this.reduced) this._burst(this.comp.pos.clone().add(new THREE.Vector3(0, 1, 0)), ['#A5B4FC', '#FDE68A', '#FFFFFF'], 30);
   }
 
-  /** items: [{ id, kind, done }] in display order. */
+  /** items: [{ id, kind, done, tier, pending }] in display order. */
   setMissions(items) {
     const ids = new Set(items.map((i) => i.id));
     for (const [id, o] of this.objects) {
@@ -283,10 +283,13 @@ export class World {
       o.radius = radius;
       o.group.position.set(Math.sin(a) * radius, 0, Math.cos(a) * radius);
       o.obj.rotation.y = a * 0.35; // turned slightly towards the viewer
+      o.growth.rotation.y = a; // growth corner faces the rim
+      o.bud.visible = !!it.pending;
       if (o.done !== !!it.done) {
         o.done = !!it.done;
         this._applyDone(o);
       }
+      this._applyGrowth(o, it.tier || 0);
     });
     this._ready = true;
   }
@@ -416,7 +419,38 @@ export class World {
     const hit = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.8, 10), new THREE.MeshBasicMaterial({ visible: false }));
     hit.position.y = 0.8;
     group.add(hit);
-    return { id: it.id, kind: it.kind, group, obj, ring, marker, deco, done: !!it.done, angle: 0, radius: 2.75, t0: Math.random() * 10 };
+    const growth = new THREE.Group();
+    growth.name = 'growth';
+    growth.scale.setScalar(0.88);
+    group.add(growth);
+    const bud = buildBud();
+    bud.position.set(0.5, 0, 0.35);
+    bud.visible = false;
+    group.add(bud);
+    return { id: it.id, kind: it.kind, group, obj, ring, marker, deco, growth, bud, tier: -1, done: !!it.done, angle: 0, radius: 2.75, t0: Math.random() * 10 };
+  }
+
+  /** Rebuild a habit's growth corner; new pieces spring up (growth never shrinks visually mid-session). */
+  _applyGrowth(o, tier) {
+    if (tier === o.tier) return;
+    const from = o.tier;
+    o.tier = tier;
+    o.growth.clear();
+    const g = buildGrowth(o.kind, tier);
+    const fresh = [];
+    for (const piece of [...g.children]) {
+      o.growth.add(piece);
+      if (piece.userData.tier > from) fresh.push(piece);
+    }
+    if (!this._ready || this.reduced || from < 0 || !fresh.length) return;
+    fresh.forEach((p, i) => {
+      p.scale.setScalar(0.01);
+      setTimeout(() => this._tween(800, (k) => p.scale.setScalar(Math.max(0.01, this._elastic(k)))), i * 180);
+    });
+    const at = o.group.position.clone();
+    at.y += 0.6;
+    this.spin.updateMatrixWorld();
+    this._burst(this.spin.localToWorld(at), ['#4ADE80', '#BBF7D0', '#FDE68A', '#FFFFFF'], 30);
   }
 
   _applyDone(o, animate = false) {
@@ -644,6 +678,7 @@ export class World {
 
     // mission markers
     for (const o of this.objects.values()) {
+      if (o.bud.visible && !this.reduced) o.bud.scale.setScalar(1 + Math.sin(t * 2.2 + o.t0) * 0.12);
       if (o.done) {
         const badge = o.deco.getObjectByName('badge');
         if (badge) badge.rotation.y = t * 1.5;

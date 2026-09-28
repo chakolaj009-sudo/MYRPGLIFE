@@ -114,7 +114,7 @@ const Hud = forwardRef(function Hud({ t, hello, title, level, ping, month, stage
             <Plant stage={stage} size={24} soil={false} />
           </span>
           <span className="flex min-w-0 flex-col items-start leading-tight">
-            <b className="max-w-[78px] truncate">{stageLabel}</b>
+            <b className="max-w-[96px] leading-[1.1]">{stageLabel}</b>
             <small>{t('chip.growth')}</small>
           </span>
         </button>
