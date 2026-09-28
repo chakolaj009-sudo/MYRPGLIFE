@@ -184,7 +184,14 @@ export function normalize(raw) {
     ? uniqueBy(
         s.keepsakes
           .filter((k) => isObj(k) && str(k.id) && str(k.type) && isValidKey(k.date))
-          .map((k) => ({ id: k.id, type: k.type, date: k.date, ...(str(k.habit) ? { habit: k.habit } : {}), ...(cleanTitle(k.title) ? { title: cleanTitle(k.title) } : {}) })),
+          .map((k) => ({
+            id: k.id,
+            type: k.type,
+            date: k.date,
+            ...(str(k.habit) ? { habit: k.habit } : {}),
+            ...(cleanTitle(k.title) ? { title: cleanTitle(k.title) } : {}),
+            ...(str(k.key) ? { key: k.key } : {}),
+          })),
         (k) => k.id,
       )
     : [];
@@ -511,6 +518,49 @@ export function pastAnswer(state, today) {
   if (!old.length) return null;
   const [week, r] = old[Math.floor(dayNumber(today) / 4) % old.length];
   return { answer: r.answer, weeksAgo: Math.floor(diffDays(addDays(week, 7), today) / 7) || 1 };
+}
+
+// ---------------------------------------------------------------------------
+// Rare reactions: triggered by meaning, not volume. At most one per
+// Monday–Sunday week; each leaves a dated keepsake pebble in the world.
+// Keepsakes are moments — they stay even if a task is later unchecked.
+
+export const REACTIONS = ['first-minimum', 'comeback', 'full-after-min', 'habit-50', 'habit-month'];
+
+const habitRef = (item) => ({ habit: item.id, ...(item.title ? { title: item.title } : {}), ...(item.key ? { key: item.key } : {}) });
+
+export function checkReaction(state, today) {
+  if (state.keepsakes.some((k) => weekStart(k.date) === weekStart(today))) return null;
+  const day = state.days[today];
+  if (!isActive(day)) return null;
+  const has = (id) => state.keepsakes.some((k) => k.id === id);
+  const make = (type, id, extra = {}) => ({ id, type, date: today, ...extra });
+
+  if (day.minimum && !state.keepsakes.some((k) => k.type === 'first-minimum')) return make('first-minimum', 'first-minimum');
+  if (day.comeback && !has(`comeback-${today}`)) return make('comeback', `comeback-${today}`);
+  const y = state.days[addDays(today, -1)];
+  if (isAllDone(day) && y && y.minimum && isActive(y) && !has(`full-after-min-${today}`)) return make('full-after-min', `full-after-min-${today}`);
+
+  const counts = habitCounts(state);
+  for (const item of day.items) {
+    if (!day.done.includes(item.id)) continue;
+    if ((counts[item.id] || 0) >= 50 && !has(`habit-50-${item.id}`)) return make('habit-50', `habit-50-${item.id}`, habitRef(item));
+  }
+  const last30 = Array.from({ length: 30 }, (_, i) => addDays(today, -i));
+  for (const item of day.items) {
+    if (!day.done.includes(item.id) || item.kind !== 'routine') continue;
+    const id = `habit-month-${item.id}-${today.slice(0, 7)}`;
+    if (has(id)) continue;
+    const n = last30.filter((k) => state.days[k]?.done.includes(item.id)).length;
+    if (n >= 20) return make('habit-month', id, habitRef(item));
+  }
+  return null;
+}
+
+export function awardReaction(state, today) {
+  const k = checkReaction(state, today);
+  if (!k) return { state, keepsake: null };
+  return { state: { ...state, keepsakes: [...state.keepsakes, k] }, keepsake: k };
 }
 
 // ---------------------------------------------------------------------------

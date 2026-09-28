@@ -86,7 +86,9 @@ export const DoneCard = forwardRef(function DoneCard({ t, praise, bonus, month, 
 });
 
 // ---------------------------------------------------------------- Garden: growth, totals, medals, companions
-export function GardenPanel({ t, st }) {
+const PEBBLE = { 'first-minimum': '#A78BFA', comeback: '#FB923C', 'full-after-min': '#38BDF8', 'habit-50': '#F59E0B', 'habit-month': '#22C55E' };
+
+export function GardenPanel({ t, st, moments = [] }) {
   const [picked, setPicked] = useState(null);
   const stage = st.stage;
   const next = stage.next;
@@ -123,6 +125,22 @@ export function GardenPanel({ t, st }) {
           </div>
         ))}
       </dl>
+
+      {moments.length > 0 && (
+        <>
+          <h3 className="eyebrow mb-1 mt-4">{t('keep.title')}</h3>
+          <p className="mb-2 text-xs text-ink2">{t('keep.hint')}</p>
+          <ul className="m-0 list-none space-y-1.5 p-0">
+            {moments.map((m) => (
+              <li key={m.id} className="flex items-center gap-3 rounded-2xl bg-bg px-3 py-2">
+                <span className="h-4 w-5 shrink-0 rounded-[50%]" style={{ background: PEBBLE[m.type], boxShadow: `0 0 8px ${PEBBLE[m.type]}88` }} aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[13.5px] font-semibold">{m.label}</span>
+                <span className="text-xs text-muted">{m.date}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <h3 className="eyebrow mb-2 mt-4">{t('ach.title')}</h3>
       <ul className="m-0 grid list-none grid-cols-6 gap-1.5 p-0">

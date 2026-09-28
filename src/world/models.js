@@ -608,3 +608,23 @@ export function buildBud() {
   g.add(mesh(sphere(0.045, 10, 8), mat('#BBF7D0', { emissive: '#4ADE80', ei: 0.9 }), { y: 0.14, sy: 1.3, shadow: false }));
   return g;
 }
+
+// ---------------------------------------------------------------- keepsake pebbles
+export const PEBBLE_COLORS = {
+  'first-minimum': ['#C4B5FD', '#A78BFA'],
+  comeback: ['#FDBA74', '#FB923C'],
+  'full-after-min': ['#7DD3FC', '#38BDF8'],
+  'habit-50': ['#FDE68A', '#F59E0B'],
+  'habit-month': ['#86EFAC', '#22C55E'],
+};
+export function buildPebble(type) {
+  const [c, glow] = PEBBLE_COLORS[type] || PEBBLE_COLORS.comeback;
+  const g = new THREE.Group();
+  g.add(mesh(sphere(0.15, 18, 12), mat(c, { roughness: 0.35, emissive: c, ei: 0.25 }), { y: 0.06, sx: 1.25, sy: 0.55 }));
+  g.add(mesh(sphere(0.035, 10, 8), mat('#FFFFFF', { emissive: glow, ei: 1.2 }), { y: 0.14, shadow: false }));
+  // invisible, finger-sized hit area
+  const hit = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.5, 8), new THREE.MeshBasicMaterial({ visible: false }));
+  hit.position.y = 0.2;
+  g.add(hit);
+  return g;
+}

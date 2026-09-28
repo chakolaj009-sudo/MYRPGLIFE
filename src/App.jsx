@@ -4,7 +4,7 @@ import { useStore } from './lib/useStore.js';
 import { detectLang, itemTitle, makeT, QUOTES, safeLocale } from './lib/i18n.js';
 import { dayNumber, keyToLocalDate } from './domain/dates.js';
 import {
-  addCustom, ALL_DONE_BONUS, discoveries, levelFromXp, markGrown, markSeen, newlyUnlocked, pastAnswer, pendingReflection, recordReflection, removeItem,
+  addCustom, ALL_DONE_BONUS, awardReaction, discoveries, levelFromXp, markGrown, markSeen, newlyUnlocked, pastAnswer, pendingReflection, recordReflection, removeItem,
   setLang, setMinimum, setProfile, setRoutines, stats, toggleItem, WARDROBE, weekStory, worldGrowth, xpPerTask,
 } from './domain/model.js';
 import { flyXp, floatText, prefersReducedMotion, sparkleBurst, haptic } from './lib/fx.js';
@@ -127,6 +127,19 @@ export default function App() {
       const fromCard = center(cardEl);
       (hasWorld ? world.current.play(id) : Promise.resolve()).then(() => {
         setWalking(({ [id]: _, ...rest }) => rest);
+        // A rare, meaningful moment? (at most one a week)
+        let ks = null;
+        commit((s, k) => {
+          const r = awardReaction(s, k);
+          ks = r.keepsake;
+          return r.state;
+        });
+        if (ks) {
+          setTimeout(() => {
+            world.current?.reaction(ks.type, ks.habit);
+            say(t(`keep.line.${ks.type}`, { habit: keepHabit(ks) }), 4200);
+          }, reduce ? 300 : 1300);
+        }
         if (reduce) return;
         const from = (hasWorld && world.current.screenPoint(id)) || fromCard;
         floatText(from, `+${gain} XP`);
@@ -140,6 +153,7 @@ export default function App() {
     },
     [commit, say, t],
   );
+  const keepHabit = (k) => (k.title || k.key ? itemTitle(t, { title: k.title, key: k.key }) : '');
   const undo = useCallback((id) => commit((s, k) => (s.days[k]?.done.includes(id) ? toggleItem(s, k, id) : s)), [commit]);
   const add = useCallback((title, icon, mini) => commit((s, k) => addCustom(s, k, title, undefined, icon, mini)), [commit]);
   const remove = useCallback((id) => commit((s, k) => removeItem(s, k, id)), [commit]);
@@ -283,6 +297,8 @@ export default function App() {
   const praise = t(`done.praise.${((n % 4) + 4) % 4}`);
   const dateLabel = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(keyToLocalDate(today));
   const greet = t(greetingKey(hour));
+  const shortDate = (k) => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(keyToLocalDate(k));
+  const moments = state.keepsakes.map((k) => ({ id: k.id, type: k.type, date: shortDate(k.date), label: t(`keep.label.${k.type}`, { habit: keepHabit(k) }) }));
   const header = state.name ? { hello: `${greet},`, title: state.name } : { hello: dateLabel, title: greet };
 
   const [sheet, setSheet] = useState(null); // 'settings' | 'week' | 'garden' | 'played' | 'add'
@@ -304,6 +320,11 @@ export default function App() {
         label={t('world.label')}
         onTapMission={(id) => play(id, null)}
         onTapCompanion={() => say(t(`say.tap.${Math.floor(Math.random() * 5)}`), 1500)}
+        keepsakes={state.keepsakes}
+        onTapKeepsake={(id) => {
+          const k = state.keepsakes.find((x) => x.id === id);
+          if (k) say(`${shortDate(k.date)} · ${t(`keep.label.${k.type}`, { habit: keepHabit(k) })}`, 3200);
+        }}
       />
       <div className="soft-veil" aria-hidden="true" />
 
@@ -362,7 +383,7 @@ export default function App() {
       {sheet === 'garden' && (
         <Sheet title={t('stats.title')} onClose={close} t={t}>
           <div className="mb-4">
-            <GardenPanel t={t} st={st} />
+            <GardenPanel t={t} st={st} moments={moments} />
           </div>
         </Sheet>
       )}

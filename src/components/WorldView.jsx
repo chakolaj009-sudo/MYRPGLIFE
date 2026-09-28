@@ -14,16 +14,16 @@ const STARS = Array.from({ length: 34 }, (_, i) => [(i * 37) % 100, (i * 53) % 5
  * Full-bleed 3D island. `missions` = [{ id, kind, done }].
  * Imperative API via ref: play(id), undo(id), focus(id), react(), celebrate(), screenPoint(id).
  */
-const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, missions, minimum = false, offset = 0.13, onTapMission, onTapCompanion, label }, ref) {
+const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, missions, keepsakes = [], minimum = false, offset = 0.13, onTapMission, onTapCompanion, onTapKeepsake, label }, ref) {
   const host = useRef(null);
   const world = useRef(null);
   const [fallback, setFallback] = useState(false);
   const cb = useRef({});
-  cb.current = { onTapMission, onTapCompanion };
+  cb.current = { onTapMission, onTapCompanion, onTapKeepsake };
 
   const [ready, setReady] = useState(false);
   const latest = useRef({});
-  latest.current = { offset, phase, stage, species, wear, missions, minimum };
+  latest.current = { offset, phase, stage, species, wear, missions, minimum, keepsakes };
 
   // The 3D engine is loaded lazily so the HUD and cards paint immediately.
   useEffect(() => {
@@ -36,6 +36,7 @@ const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, m
           reducedMotion: prefersReducedMotion(),
           onTapMission: (id) => cb.current.onTapMission?.(id),
           onTapCompanion: () => cb.current.onTapCompanion?.(),
+          onTapKeepsake: (id) => cb.current.onTapKeepsake?.(id),
         });
         const L = latest.current;
         w.setOffset(L.offset);
@@ -44,6 +45,7 @@ const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, m
         w.setCompanion(L.species, L.wear);
         w.setMissions(L.missions);
         w.setMinimum(L.minimum);
+        w.setKeepsakes(L.keepsakes);
         world.current = w;
         if (/[?&]debug\b/.test(location.search)) window.__world = w;
         setReady(true);
@@ -62,6 +64,7 @@ const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, m
   useEffect(() => world.current?.setCompanion(species, wear), [species, wear, ready]);
   useEffect(() => world.current?.setMissions(missions), [missions, ready]);
   useEffect(() => world.current?.setMinimum(minimum), [minimum, ready]);
+  useEffect(() => world.current?.setKeepsakes(keepsakes), [keepsakes, ready]);
 
   useImperativeHandle(ref, () => ({
     play: (id) => world.current?.play(id) ?? Promise.resolve(),
@@ -69,6 +72,7 @@ const WorldView = forwardRef(function WorldView({ phase, stage, species, wear, m
     focus: (id) => world.current?.focus(id),
     react: () => world.current?.react(),
     celebrate: () => world.current?.celebrate(),
+    reaction: (type, habit) => world.current?.reaction(type, habit),
     screenPoint: (id) => world.current?.screenPoint(id) ?? null,
     hasWorld: () => !!world.current,
   }));

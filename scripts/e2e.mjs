@@ -305,6 +305,24 @@ await check('weekly reflection: once a week, three lines, one-tap answer, then t
   assert((await cards(p2).count()) >= 1, 'the day continues normally');
 });
 
+await check('rare moment: first Minimum day leaves a dated pebble in the world (max one a week)', async (page) => {
+  await page.goto(URL + '?debug');
+  await worldReady(page);
+  await settle(page, 1000);
+  await page.getByRole('button', { name: 'Minimum day' }).click();
+  await settle(page, 400);
+  await cards(page).first().click();
+  await page.getByText("A tiny day still counts. I'll keep this pebble for it.").waitFor({ timeout: 15000 });
+  const s = await state(page);
+  assert(s.keepsakes.length === 1 && s.keepsakes[0].type === 'first-minimum', 'keepsake not saved');
+  assert(await page.evaluate(() => window.__world.pebbles.size === 1), 'pebble not in the world');
+  await cards(page).first().click();
+  await settle(page, 3500);
+  assert((await state(page)).keepsakes.length === 1, 'at most one a week');
+  await page.getByRole('button', { name: /^Growth/ }).click();
+  assert(await page.getByText('Your first Minimum day').isVisible(), 'moment missing from the garden');
+});
+
 await check('imports legacy Life RPG data and keeps the old keys', async (page) => {
   await page.addInitScript(() => {
     if (!localStorage.getItem('arch_record_v1'))

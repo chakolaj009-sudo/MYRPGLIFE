@@ -2,7 +2,7 @@
 // fast: one renderer, soft shadows from a single sun, pooled particles.
 // React talks to it through a tiny imperative API (see bottom of class).
 import * as THREE from 'three';
-import { buildBud, buildCloud, buildCompanion, buildGrowth, buildGrowthTree, buildIsland, buildMarker, buildMiniIsland, buildMissionObject, buildRing, mat } from './models.js';
+import { buildBud, buildPebble, buildCloud, buildCompanion, buildGrowth, buildGrowthTree, buildIsland, buildMarker, buildMiniIsland, buildMissionObject, buildRing, mat } from './models.js';
 
 const TAU = Math.PI * 2;
 const easeOut = (k) => 1 - Math.pow(1 - k, 3);
@@ -32,10 +32,12 @@ export function webglAvailable() {
 }
 
 export class World {
-  constructor(container, { onTapMission, onTapCompanion, reducedMotion = false } = {}) {
+  constructor(container, { onTapMission, onTapCompanion, onTapKeepsake, reducedMotion = false } = {}) {
     this.container = container;
     this.onTapMission = onTapMission;
     this.onTapCompanion = onTapCompanion;
+    this.onTapKeepsake = onTapKeepsake;
+    this.pebbles = new Map(); // keepsake id -> mesh
     this.reduced = reducedMotion;
     this.objects = new Map(); // id -> { group, obj, marker, ring, deco, angle, radius, done }
     this.particles = [];
@@ -294,6 +296,84 @@ export class World {
     this._ready = true;
   }
 
+  /** Keepsake pebbles along the front rim, in the order they were earned. */
+  setKeepsakes(list) {
+    const ids = new Set(list.map((k) => k.id));
+    for (const [id, m] of this.pebbles) {
+      if (!ids.has(id)) {
+        this.spin.remove(m);
+        this.pebbles.delete(id);
+      }
+    }
+    list.forEach((k, i) => {
+      if (this.pebbles.has(k.id)) return;
+      const m = buildPebble(k.type);
+      m.userData.pick = `keep:${k.id}`;
+      const side = i % 2 ? -1 : 1;
+      const step = Math.floor(i / 2);
+      const row = Math.floor(step / 6);
+      const a = THREE.MathUtils.degToRad(side * (16 + (step % 6) * 7 + row * 3));
+      const r = 3.62 - row * 0.4;
+      m.position.set(Math.sin(a) * r, 0, Math.cos(a) * r);
+      m.rotation.y = i * 1.3;
+      this.spin.add(m);
+      this.pebbles.set(k.id, m);
+      if (this._keepReady && !this.reduced) {
+        m.scale.setScalar(0.01);
+        setTimeout(() => this._tween(900, (kk) => m.scale.setScalar(Math.max(0.01, this._elastic(kk)))), 900);
+      }
+    });
+    this._keepReady = true;
+  }
+
+  /** A small, unique animation for each rare moment. */
+  reaction(type, habitId) {
+    const c = this.comp;
+    const head = () => this.spin.localToWorld(c.pos.clone().add(new THREE.Vector3(0, 1.6, 0)));
+    const at = (id) => {
+      const o = this.objects.get(id);
+      if (!o) return head();
+      const v = o.group.position.clone();
+      v.y += 0.9;
+      return this.spin.localToWorld(v);
+    };
+    this.spin.updateMatrixWorld();
+    this._face(true, 2200);
+    if (this.reduced) return;
+    this._faceViewer();
+    switch (type) {
+      case 'first-minimum': // a slow drift of moonlight motes while resting
+        for (let i = 0; i < 4; i++) setTimeout(() => this._burst(head(), ['#C4B5FD', '#E9D5FF', '#FFFFFF'], 10, { up: 0.5, gravity: -0.6, spread: 0.5, life: 2.2 }), i * 380);
+        break;
+      case 'comeback': // a happy little wave
+        this._tween(1100, (k) => (this.parts.body.rotation.z = Math.sin(k * Math.PI * 6) * 0.18 * (1 - k))).then(() => (this.parts.body.rotation.z = 0));
+        this._burst(head(), ['#FDBA74', '#FDE68A', '#FFFFFF'], 30, { up: 0.8 });
+        break;
+      case 'full-after-min': {
+        const y0 = c.spinY;
+        this._tween(900, (k) => {
+          c.spinY = y0 + Math.PI * 4 * (1 - Math.pow(1 - k, 3));
+          this.parts.body.position.y = Math.sin(k * Math.PI) * 0.7;
+        }).then(() => {
+          c.spinY = 0;
+          this.parts.body.position.y = 0;
+        });
+        this._burst(head(), ['#F87171', '#FBBF24', '#4ADE80', '#38BDF8', '#A78BFA'], 70);
+        break;
+      }
+      case 'habit-50':
+        if (habitId) this.focus(habitId);
+        setTimeout(() => this._burst(at(habitId), ['#FDE68A', '#FBBF24', '#FFFFFF'], 50, { up: 1.3 }), 600);
+        setTimeout(() => this._burst(at(habitId), ['#FDE68A', '#F59E0B'], 30, { up: 1 }), 1100);
+        this._hop(0.5, 600);
+        break;
+      default: // habit-month: a ring of leaves around the habit
+        if (habitId) this.focus(habitId);
+        setTimeout(() => this._burst(at(habitId), ['#86EFAC', '#4ADE80', '#BBF7D0'], 44, { up: 0.6, spread: 1.6, gravity: 2 }), 600);
+        this._hop(0.35, 500).then(() => this._hop(0.35, 500));
+    }
+  }
+
   // ---------------------------------------------------------------- actions
   /** Spin the island so this mission faces the camera, and highlight it. */
   focus(id) {
@@ -358,9 +438,15 @@ export class World {
     } else this._hop(0.45, 520);
   }
 
+  /** Turn the companion to look at the viewer, whatever way the island is spun. */
+  _faceViewer() {
+    if (!this.comp.busy) this._turnTo(-this.spin.rotation.y, 320);
+  }
+
   celebrate() {
     this._face(true, 1800);
     if (this.reduced) return;
+    this._faceViewer();
     const base = this.spin.localToWorld(this.comp.pos.clone().add(new THREE.Vector3(0, 1.4, 0)));
     this._burst(base, ['#FBBF24', '#A5B4FC', '#4ADE80', '#F9A8D4', '#38BDF8'], 60);
     this._hop(0.6, 600).then(() => this._hop(0.4, 500));
@@ -537,7 +623,7 @@ export class World {
     });
   }
 
-  _burst(at, colors, count) {
+  _burst(at, colors, count, { up = 1, spread = 1, gravity = 7, life = 1 } = {}) {
     if (this.reduced) return;
     const geo = (this._pgeo ||= new THREE.IcosahedronGeometry(0.06, 0));
     for (let i = 0; i < count; i++) {
@@ -545,8 +631,9 @@ export class World {
       m.position.copy(at);
       const a = Math.random() * TAU;
       const s = 1.5 + Math.random() * 2.5;
-      m.userData.v = new THREE.Vector3(Math.cos(a) * s * 0.6, 2.5 + Math.random() * 3, Math.sin(a) * s * 0.6);
-      m.userData.life = 0.9 + Math.random() * 0.6;
+      m.userData.v = new THREE.Vector3(Math.cos(a) * s * 0.6 * spread, (2.5 + Math.random() * 3) * up, Math.sin(a) * s * 0.6 * spread);
+      m.userData.life = (0.9 + Math.random() * 0.6) * life;
+      m.userData.g = gravity;
       m.userData.age = 0;
       m.userData.spin = new THREE.Vector3(Math.random() * 8, Math.random() * 8, 0);
       this.scene.add(m);
@@ -596,10 +683,15 @@ export class World {
       let o = h.object;
       while (o && !o.userData.pick) o = o.parent;
       if (!o) continue;
-      if (o.userData.pick === 'companion') {
+      const pick = o.userData.pick;
+      if (pick === 'companion') {
         this.react();
         this.onTapCompanion?.();
-      } else this.onTapMission?.(o.userData.pick);
+      } else if (pick.startsWith('keep:')) {
+        const peb = this.pebbles.get(pick.slice(5));
+        if (peb && !this.reduced) this._tween(500, (k) => (peb.position.y = Math.sin(k * Math.PI) * 0.25));
+        this.onTapKeepsake?.(pick.slice(5));
+      } else this.onTapMission?.(pick);
       return;
     }
   }
@@ -697,7 +789,7 @@ export class World {
       const p = this.particles[i];
       const u = p.userData;
       u.age += dt;
-      u.v.y -= 7 * dt;
+      u.v.y -= (u.g ?? 7) * dt;
       p.position.addScaledVector(u.v, dt);
       p.rotation.x += u.spin.x * dt;
       p.rotation.y += u.spin.y * dt;

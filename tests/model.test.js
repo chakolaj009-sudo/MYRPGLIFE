@@ -359,3 +359,62 @@ describe('weekly reflection', () => {
     expect(hits[0].answer).toBe('Mornings');
   });
 });
+
+describe('rare reactions & keepsakes', () => {
+  const award = (s, k) => M.awardReaction(s, k);
+  it('first Minimum day leaves a keepsake, only once ever', () => {
+    let s = M.setMinimum(M.ensureDay(M.createState(), '2026-09-21'), '2026-09-21', true);
+    expect(M.checkReaction(s, '2026-09-21')).toBe(null); // nothing done yet
+    s = M.toggleItem(s, '2026-09-21', 'r-read');
+    const r = award(s, '2026-09-21');
+    expect(r.keepsake).toMatchObject({ type: 'first-minimum', date: '2026-09-21' });
+    let t = M.setMinimum(M.prepareDay(r.state, '2026-09-29').state, '2026-09-29', true);
+    t = M.toggleItem(t, '2026-09-29', 'r-read');
+    expect(M.checkReaction(t, '2026-09-29')?.type).not.toBe('first-minimum');
+  });
+  it('coming back after a gap is a moment', () => {
+    let s = withDays({ '2026-09-14': 1 });
+    s = M.prepareDay(s, '2026-09-18').state;
+    s = M.toggleItem(s, '2026-09-18', 'r-teeth');
+    expect(M.checkReaction(s, '2026-09-18')).toMatchObject({ type: 'first-minimum' }); // comeback opens as a Minimum day
+    s = award(s, '2026-09-18').state;
+    let u = M.prepareDay(s, '2026-09-24').state;
+    u = M.toggleItem(u, '2026-09-24', 'r-teeth');
+    expect(M.checkReaction(u, '2026-09-24')).toMatchObject({ type: 'comeback', id: 'comeback-2026-09-24' });
+  });
+  it('at most one per week', () => {
+    let s = M.setMinimum(M.ensureDay(M.createState(), '2026-09-21'), '2026-09-21', true);
+    s = award(M.toggleItem(s, '2026-09-21', 'r-read'), '2026-09-21').state;
+    let t = M.ensureDay(s, '2026-09-22');
+    for (const i of t.days['2026-09-22'].items) t = M.toggleItem(t, '2026-09-22', i.id); // full day after Minimum day
+    expect(M.checkReaction(t, '2026-09-22')).toBe(null); // same week
+  });
+  it('a full day right after a Minimum day', () => {
+    let s = M.setMinimum(M.ensureDay(M.createState(), '2026-09-27'), '2026-09-27', true);
+    s = M.toggleItem(s, '2026-09-27', 'r-read'); // Sunday (no keepsake awarded here)
+    s = M.ensureDay(s, '2026-09-28');
+    for (const i of s.days['2026-09-28'].items) s = M.toggleItem(s, '2026-09-28', i.id);
+    s = { ...s, keepsakes: [{ id: 'first-minimum', type: 'first-minimum', date: '2026-01-01' }] };
+    expect(M.checkReaction(s, '2026-09-28')).toMatchObject({ type: 'full-after-min' });
+  });
+  it('50th completion of one habit', () => {
+    const spec = {};
+    for (let i = 0; i < 50; i++) spec[D.addDays('2026-06-01', i)] = 1;
+    let s = withDays(spec);
+    const last = D.addDays('2026-06-01', 49);
+    const k = M.checkReaction(s, last);
+    expect(k).toMatchObject({ type: 'habit-50', habit: 'r-teeth', key: 'routine.teeth' });
+    // once awarded, the same week stays quiet
+    expect(M.checkReaction({ ...s, keepsakes: [k] }, last)).toBe(null);
+  });
+  it('habit through a month: 20 of the last 30 days', () => {
+    const spec = {};
+    for (let i = 0; i < 20; i++) spec[D.addDays('2026-09-01', i)] = 1;
+    const s = withDays(spec);
+    expect(M.checkReaction(s, '2026-09-20')).toMatchObject({ type: 'habit-month', habit: 'r-teeth', id: 'habit-month-r-teeth-2026-09' });
+  });
+  it('keepsakes survive normalisation', () => {
+    const s = M.normalize({ schema: 2, keepsakes: [{ id: 'habit-50-r-read', type: 'habit-50', date: '2026-09-20', habit: 'r-read', key: 'routine.read' }] });
+    expect(s.keepsakes[0].key).toBe('routine.read');
+  });
+});
