@@ -310,7 +310,6 @@ button {
 .slot.done { background: linear-gradient(135deg, #8b93ff, #4f46e5); box-shadow: 0 3px 8px rgb(79 70 229 / 0.35); }
 .slot.some { background: conic-gradient(var(--primary) var(--p), var(--tint) 0); }
 .slot.some::after { content: ''; width: 18px; height: 18px; border-radius: 50%; background: var(--card); }
-.slot.frozen { background: var(--sky-soft); color: var(--sky); }
 .slot.today:not(.done) { border: 2px dashed #a5abf8; background: var(--tint); animation: ring 2.4s ease-in-out infinite; }
 .slot.today.some { background: conic-gradient(var(--primary) var(--p), var(--tint) 0); }
 .slot.future { opacity: 0.55; }
@@ -573,10 +572,13 @@ button {
   position: absolute;
   inset: auto 0 0 0;
   z-index: 10;
+  pointer-events: none; /* the gradient lets touches reach the island; controls opt back in */
   padding-bottom: max(env(safe-area-inset-bottom), 12px);
   background: linear-gradient(to top, rgb(18 23 60 / 0.55) 0%, rgb(18 23 60 / 0.28) 55%, transparent 100%);
 }
-.hand-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 18px 0; }
+.hand-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 22px 16px 0; }
+.hand-head > *, .hand-row, .hand-done { pointer-events: auto; }
+.hand-head h2 { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .played-pill {
   min-height: 44px;
   min-width: 44px;
@@ -695,3 +697,25 @@ button {
   backdrop-filter: blur(8px);
   box-shadow: none;
 }
+
+.min-pill {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  background: rgb(255 255 255 / 0.16);
+  border: 1.5px solid rgb(255 255 255 / 0.45);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: background 0.3s ease, color 0.3s ease;
+}
+.min-pill.on { background: #fff; color: #4f46e5; border-color: #fff; }
+/* Minimum day: the whole scene softens a little. */
+.game.soft .hand { background: linear-gradient(to top, rgb(40 36 90 / 0.5) 0%, rgb(40 36 90 / 0.22) 55%, transparent 100%); }
+.game .soft-veil { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 40%, rgb(255 236 214 / 0.18), rgb(120 110 200 / 0.22)); opacity: 0; transition: opacity 1.2s ease; z-index: 1; }
+.game.soft .soft-veil { opacity: 1; }

@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, Moon, Plus, X } from 'lucide-react';
 import { itemTitle } from '../lib/i18n.js';
-import { XP_PER_TASK } from '../domain/model.js';
 import { MissionIcon, iconKey } from './Art.jsx';
 import { haptic, prefersReducedMotion } from '../lib/fx.js';
 
@@ -24,7 +23,7 @@ const CARD_THEME = {
 };
 export const themeFor = (icon) => CARD_THEME[iconKey(icon)] || CARD_THEME.star;
 
-function Card({ item, t, onPlay, onRemove, leaving, index }) {
+function Card({ item, t, onPlay, onRemove, leaving, index, minimum, xp }) {
   const [tilt, setTilt] = useState({ x: 0, y: 0, lift: 0, glare: 50 });
   const drag = useRef(null);
   const el = useRef(null);
@@ -68,7 +67,7 @@ function Card({ item, t, onPlay, onRemove, leaving, index }) {
         ref={el}
         role="button"
         tabIndex={0}
-        aria-label={`${itemTitle(t, item)}, +${XP_PER_TASK} XP`}
+        aria-label={`${itemTitle(t, item, minimum)}, +${xp} XP`}
         onClick={() => !leaving && performance.now() - flicked.current > 500 && onPlay(item.id, el.current)}
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onPlay(item.id, el.current))}
         onPointerDown={onDown}
@@ -88,12 +87,12 @@ function Card({ item, t, onPlay, onRemove, leaving, index }) {
       >
         <span className="card-glare" style={{ background: `radial-gradient(circle at ${tilt.glare}% 0%, rgb(255 255 255 / .85), transparent 55%)` }} />
         <span className="card-xp" dir="ltr">
-          +{XP_PER_TASK}
+          +{xp}
         </span>
         <span className="card-art" style={{ background: `radial-gradient(circle at 40% 35%, #ffffff, ${c1} 70%)`, boxShadow: `0 6px 16px ${c2}55` }}>
           <MissionIcon kind={item.icon || 'star'} size={42} />
         </span>
-        <span className="card-title">{itemTitle(t, item)}</span>
+        <span className="card-title">{itemTitle(t, item, minimum)}</span>
         <span className="card-foot">{item.kind === 'custom' ? t('task.custom') : t('task.daily')}</span>
       </div>
       {item.kind === 'custom' && !leaving && (
@@ -105,27 +104,32 @@ function Card({ item, t, onPlay, onRemove, leaving, index }) {
   );
 }
 
-export default function CardHand({ t, items, doneItems, leaving, allDone, onPlay, onRemove, onAdd, onShowDone, doneCard, bonus }) {
+export default function CardHand({ t, items, doneItems, leaving, allDone, onPlay, onRemove, onAdd, onShowDone, doneCard, bonus, minimum, onMinimum, xp }) {
   const remaining = items.filter((i) => !leaving[i.id]).length;
   return (
     <section className="hand" aria-labelledby="hand-h">
       <div className="hand-head">
         <h2 id="hand-h" className="text-[17px] font-extrabold tracking-[-0.02em] text-white drop-shadow-[0_1px_6px_rgb(20_24_60/0.45)]">
           {allDone ? t('hand.allDone') : t('hand.title', { n: remaining })}
-          {!allDone && <span className="ms-2 text-[12.5px] font-semibold text-white/80" dir="ltr">{t('today.bonusHint', { xp: bonus })}</span>}
+          {!allDone && <span className="ms-2 hidden text-[12.5px] font-semibold text-white/80 min-[400px]:inline" dir="ltr">{t('today.bonusHint', { xp: bonus })}</span>}
         </h2>
-        {doneItems.length > 0 && (
-          <button type="button" onClick={onShowDone} className="played-pill" aria-label={t('today.doneDrawer', { n: doneItems.length })}>
-            <Check size={14} strokeWidth={3} /> {doneItems.length}
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={onMinimum} aria-pressed={minimum} className={`min-pill ${minimum ? 'on' : ''}`}>
+            <Moon size={14} strokeWidth={2.4} /> {t('min.toggle')}
           </button>
-        )}
+          {doneItems.length > 0 && (
+            <button type="button" onClick={onShowDone} className="played-pill" aria-label={t('today.doneDrawer', { n: doneItems.length })}>
+              <Check size={14} strokeWidth={3} /> {doneItems.length}
+            </button>
+          )}
+        </div>
       </div>
       {allDone ? (
-        <div className="px-4">{doneCard}</div>
+        <div className="hand-done px-4">{doneCard}</div>
       ) : (
         <ul className="hand-row" data-testid="hand">
           {items.map((item, i) => (
-            <Card key={item.id} item={item} t={t} index={i} leaving={!!leaving[item.id]} onPlay={onPlay} onRemove={onRemove} />
+            <Card key={item.id} item={item} t={t} index={i} leaving={!!leaving[item.id]} onPlay={onPlay} onRemove={onRemove} minimum={minimum} xp={xp} />
           ))}
           <li className="hand-slot" style={{ '--i': items.length, '--rot': '0deg' }}>
             <button type="button" className="game-card add-card" onClick={onAdd} aria-label={t('today.addBtn')}>

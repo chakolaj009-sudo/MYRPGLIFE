@@ -8,6 +8,7 @@ const TAU = Math.PI * 2;
 const easeOut = (k) => 1 - Math.pow(1 - k, 3);
 const easeInOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 const HOME = new THREE.Vector3(0, 0, 0.35);
+const REST = new THREE.Vector3(0.95, 0, 0.75); // where the companion curls up on a Minimum day
 const COMPANION_SCALE = 1.9;
 const OBJ_SCALE = 1.5;
 // Mission slots (degrees around the island, 0 = facing the viewer). The front
@@ -144,13 +145,7 @@ export class World {
   setPhase(phase) {
     if (phase === this.phase) return;
     this.phase = phase;
-    const L = LIGHTS[phase] || LIGHTS.day;
-    this.hemi.color.set(L.hemi[0]);
-    this.hemi.groundColor.set(L.hemi[1]);
-    this.hemi.intensity = L.hemi[2];
-    this.sun.color.set(L.sun[0]);
-    this.sun.intensity = L.sun[1];
-    this.sun.position.set(...L.pos);
+    this._applyLight();
 
     if (this.island) this.spin.remove(this.island);
     this.island = buildIsland(phase);
@@ -187,6 +182,42 @@ export class World {
     for (const o of this.objects.values()) this._applyDone(o);
   }
 
+  _applyLight() {
+    const L = LIGHTS[this.phase] || LIGHTS.day;
+    const soft = !!this.soft;
+    this.hemi.color.set(L.hemi[0]);
+    if (soft) this.hemi.color.lerp(new THREE.Color('#FFE6D2'), 0.45);
+    this.hemi.groundColor.set(L.hemi[1]);
+    this.hemi.intensity = L.hemi[2] * (soft ? 0.95 : 1);
+    this.sun.color.set(L.sun[0]);
+    if (soft) this.sun.color.lerp(new THREE.Color('#FFD2B0'), 0.4);
+    this.sun.intensity = L.sun[1] * (soft ? 0.55 : 1);
+    this.sun.position.set(...L.pos);
+  }
+
+  /** Minimum day: softer, warmer light; the companion curls up nearby. */
+  setMinimum(on) {
+    on = !!on;
+    if (on === this.soft) return;
+    this.soft = on;
+    if (this.phase) this._applyLight();
+    const c = this.comp;
+    if (!this.companion || c.busy) return;
+    const target = on ? REST : HOME;
+    if (this.reduced) {
+      c.pos.copy(target);
+      return;
+    }
+    c.busy = true;
+    this._walkTo(target.clone())
+      .then(() => this._turnTo(on ? -0.5 : 0, 400))
+      .then(() => (c.busy = false));
+  }
+
+  get home() {
+    return this.soft ? REST : HOME;
+  }
+
   setStage(stage) {
     if (stage === this.stage) return;
     const grow = this.stage !== null;
@@ -220,6 +251,7 @@ export class World {
       body: this.companion.children[0],
       eyes: this.companion.getObjectByName('eyes'),
       happy: this.companion.getObjectByName('happy'),
+      calm: this.companion.getObjectByName('calm'),
     };
     if (changed && !this.reduced) this._burst(this.comp.pos.clone().add(new THREE.Vector3(0, 1, 0)), ['#A5B4FC', '#FDE68A', '#FFFFFF'], 30);
   }
@@ -580,15 +612,20 @@ export class World {
       if (!c.busy && c.homeAt && t > c.homeAt) {
         c.homeAt = 0;
         c.busy = true;
-        this._walkTo(HOME.clone()).then(() => this._turnTo(0, 300)).then(() => (c.busy = false));
+        const soft = !!this.soft;
+        this._walkTo(this.home.clone()).then(() => this._turnTo(soft ? -0.5 : 0, 300)).then(() => (c.busy = false));
       }
       this.companion.position.copy(c.pos);
       // The companion spins with the island, so dragging lets you see it from every side.
       this.companion.rotation.y = c.rot + c.spinY;
       const body = this.parts.body;
-      if (!this.reduced && !c.busy && body.position.y === 0) {
-        const b = 1 + Math.sin(t * 2.4) * 0.02;
-        body.scale.set(1 / Math.sqrt(b), b, 1 / Math.sqrt(b));
+      const resting = this.soft && !c.busy && c.pos.distanceTo(REST) < 0.05 && c.mood !== 'happy';
+      if (!c.busy && body.position.y === 0) {
+        // Curled up on a Minimum day: lower, rounder, slow breathing.
+        const breathe = this.reduced ? 0 : Math.sin(t * (resting ? 1.2 : 2.4)) * (resting ? 0.03 : 0.02);
+        const b = (resting ? 0.84 : 1) + breathe;
+        const w = resting ? 1.12 : 1 / Math.sqrt(1 + breathe);
+        body.scale.set(w, b, w);
       }
       // blink & mood
       if (t > c.blinkAt) {
@@ -598,10 +635,11 @@ export class World {
       const blinking = c.blinkEnd && t < c.blinkEnd;
       const happy = c.mood === 'happy';
       if (this.parts.eyes) {
-        this.parts.eyes.visible = !happy;
+        this.parts.eyes.visible = !happy && !resting;
         this.parts.eyes.scale.y = blinking ? 0.12 : 1;
       }
       if (this.parts.happy) this.parts.happy.visible = happy;
+      if (this.parts.calm) this.parts.calm.visible = resting;
     }
 
     // mission markers

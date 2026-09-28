@@ -117,7 +117,7 @@ export function buildIsland(phase) {
 export function buildCloud(seed = 1, color = '#FFFFFF', opacity = 0.95) {
   const g = new THREE.Group();
   const r = rng(seed);
-  const m = mat(color, { opacity, roughness: 1 });
+  const m = mat(color, { opacity, roughness: 1, emissive: color, ei: 0.55 });
   for (let i = 0; i < 6; i++) {
     const s = 0.5 + r() * 0.6;
     g.add(mesh(sphere(s, 14, 10), m, { x: (i - 2.5) * 0.55 + r() * 0.2, y: r() * 0.35, z: r() * 0.4, shadow: false }));
@@ -381,6 +381,13 @@ export function buildCompanion(species = 'moji', wear = []) {
     happy.add(mesh(new THREE.TorusGeometry(0.06, 0.018, 6, 14, Math.PI), mat('#231A3B'), { x: d * 0.19, y: eyeY - 0.02, z: eyeZ + 0.02, shadow: false })),
   );
   face.add(happy);
+  const calm = new THREE.Group(); // ‿ ‿ closed, content eyes (Minimum day / resting)
+  calm.name = 'calm';
+  calm.visible = false;
+  [-1, 1].forEach((d) =>
+    calm.add(mesh(new THREE.TorusGeometry(0.06, 0.016, 6, 14, Math.PI), mat('#231A3B'), { x: d * 0.19, y: eyeY + 0.01, z: eyeZ + 0.02, rz: Math.PI, shadow: false })),
+  );
+  face.add(calm);
   if (species === 'luma') {
     [-1, 1].forEach((d) =>
       face.add(mesh(new THREE.OctahedronGeometry(0.04, 0), mat('#F2B233', { emissive: '#F2B233', ei: 0.4 }), { x: d * 0.34, y: eyeY - 0.12, z: 0.4, shadow: false })),

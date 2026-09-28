@@ -160,54 +160,11 @@ export function MissionIcon({ kind, size = 27 }) {
   }
 }
 
-/** Chain flame that grows with milestones: spark → flame → strong → blaze → spirit fire (30+). */
-export function flameTier(n) {
-  if (n >= 30) return 4;
-  if (n >= 14) return 3;
-  if (n >= 7) return 2;
-  if (n >= 3) return 1;
-  return 0;
-}
-
-const FLAME_PAL = [
-  ['#FFD66B', '#FF9F43', '#FFE8A3'],
-  ['#FFB547', '#FF6A2B', '#FFE08A'],
-  ['#FF9A3C', '#F4452B', '#FFD166'],
-  ['#FF7A59', '#E0265B', '#FFC46B'],
-  ['#9C8CFF', '#5B4BFF', '#8FE3FF'],
-];
-const FLAME_PATH = [
-  'M16 26c-4.4 0-7-2.8-7-6.3 0-3.4 2.6-5.3 4-8 .9 1.6 1.6 2.4 2.6 3 .4-2.7 1.8-5.2 3.9-7.2-.1 3.6 3.5 6.5 3.5 11.6 0 4-2.6 6.9-7 6.9z',
-  'M16 27.5c-5 0-8-3.1-8-7.2 0-4.4 3.4-6.3 4.6-10.1 1.2 1.8 1.8 2.8 3 3.4.3-3.3 2.3-6.9 5.2-9.1-.3 4.7 4.2 7.9 4.2 14.2 0 5.1-3.5 8.8-9 8.8z',
-  'M16 28.5c-5.6 0-9-3.3-9-7.8 0-4.9 3.8-7 5-11.6 1.3 2 2 3.1 3.3 3.8C15.6 9 18 5.1 21.4 2.5c-.4 5.3 5.1 8.8 5.1 15.9 0 6-4 10.1-10.5 10.1z',
-  'M16 29c-6.1 0-9.8-3.6-9.8-8.5 0-5.2 4-7.5 5.1-12.4 1.4 2.1 2.2 3.3 3.5 4 .1-4.4 2.9-8.6 6.8-11.1-.6 3.1 1.6 5.2 3 3.7 2.8 3.6 3.7 7.4 3.7 11.3 0 7.1-4.3 13-12.3 13z',
-];
-
-export function Flame({ tier = 0, size = 27, dim = false }) {
-  const u = useId().replace(/:/g, '');
-  const p = FLAME_PAL[tier];
-  return (
-    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true" className={`flame t${tier}`} style={dim ? { filter: 'grayscale(.6)', opacity: 0.6 } : undefined}>
-      <defs>
-        <linearGradient id={`fa${u}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={p[0]} /><stop offset="1" stopColor={p[1]} /></linearGradient>
-        <radialGradient id={`fb${u}`} cx=".5" cy=".7" r=".6"><stop offset="0" stopColor="#FFFBEA" /><stop offset=".6" stopColor={p[2]} /><stop offset="1" stopColor={p[2]} stopOpacity="0" /></radialGradient>
-      </defs>
-      {tier >= 3 && (
-        <>
-          <circle cx="6" cy="9" r="1.1" fill={p[2]} /><circle cx="27" cy="12" r=".9" fill={p[2]} /><circle cx="25" cy="5" r=".7" fill={p[0]} />
-        </>
-      )}
-      <path d={FLAME_PATH[Math.min(tier, 3)]} fill={`url(#fa${u})`} />
-      <path d="M16 26.2c-2.6 0-4.1-1.6-4.1-3.7 0-2.4 2-3.4 2.9-5.6 1 1.4 1.2 2 2 2.3.5-1.3.9-2.3 1.9-3.4.4 2.3 1.9 3.6 1.9 6.1 0 2.5-1.8 4.3-4.6 4.3z" fill={`url(#fb${u})`} />
-    </svg>
-  );
-}
-
 /** Medal-style keepsake. Colour by family; greyed when locked. */
 export function Medal({ id, size = 34, locked = false }) {
   const u = useId().replace(/:/g, '');
-  const c = id.startsWith('streak') ? ['#FFB547', '#F97316'] : id === 'tasks-50' ? ['#A78BFA', '#6D28D9'] : ['#5EEAD4', '#0D9488'];
-  const streakGlyph = id.startsWith('streak');
+  const c = id.startsWith('days') ? ['#FFB547', '#F97316'] : id.startsWith('tasks') ? ['#A78BFA', '#6D28D9'] : ['#5EEAD4', '#0D9488'];
+  const sunGlyph = id.startsWith('days');
   return (
     <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true" style={locked ? { filter: 'grayscale(1)', opacity: 0.35 } : undefined}>
       <defs>
@@ -218,8 +175,11 @@ export function Medal({ id, size = 34, locked = false }) {
       <circle cx="16" cy="17.5" r="10" fill={`url(#mb${u})`} />
       <circle cx="16" cy="17.5" r="7.6" fill={`url(#ma${u})`} />
       <path d="M10.6 13.5a7.6 7.6 0 0 1 6.5-3.5" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity=".55" fill="none" />
-      {streakGlyph ? (
-        <path d="M16 21.2c-2.1 0-3.3-1.3-3.3-3 0-1.9 1.6-2.7 2.3-4.5.8 1.1 1 1.6 1.6 1.9.4-1.1.8-1.9 1.6-2.8.3 1.9 1.5 2.9 1.5 4.9 0 2-1.4 3.5-3.7 3.5z" fill="#fff" />
+      {sunGlyph ? (
+        <g fill="#fff">
+          <circle cx="16" cy="17.5" r="2.6" />
+          <path d="M16 12.2v1.6M16 21.2v1.6M10.7 17.5h1.6M19.7 17.5h1.6M12.3 13.8l1.1 1.1M18.6 20.1l1.1 1.1M12.3 21.2l1.1-1.1M18.6 14.9l1.1-1.1" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" />
+        </g>
       ) : id === 'first-day' ? (
         <path d="M11.5 20h9M13 20a3 3 0 0 1 6 0M16 13.2v1.6M12 15.2l1 1M20 15.2l-1 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" fill="none" />
       ) : (

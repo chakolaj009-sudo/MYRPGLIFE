@@ -1,32 +1,42 @@
 // The whole persistent state lives in ONE versioned object:
 //
 // {
-//   schema: 1,
-//   lang: null | 'en' | 'he',          // null = follow the device
-//   routines: [{ id, key?, title?, icon }],
+//   schema: 2,
+//   lang: null | 'en' | 'he',               // null = follow the device
+//   name: string | null,
+//   buddy: 'moji' | 'luma' | 'nori',
+//   routines: [{ id, key?, title?, mini?, icon }],   // mini = the tiny version
 //   days: {
 //     'YYYY-MM-DD': {
-//       items: [{ id, kind: 'routine'|'custom', key?, title?, icon? }],
+//       items: [{ id, kind: 'routine'|'custom', key?, title?, mini?, icon? }],
 //       done: [itemId, ...],
-//       frozen?: true                  // a streak freeze protected this day
+//       minimum?: true,                     // a Minimum Day (counts fully)
+//       comeback?: true                     // first day back after a gap
 //     }
 //   },
-//   seen: [achievementId, ...],        // only used to show each unlock toast once
-//   archive: { tasks, xp, activeDays, bestStreak, runAtCutoff, cutoff },
-//   legacy?: { ... }                   // untouched snapshot of the old prototype data
+//   reflections: { [weekStartKey]: { answer: string|null, on: 'YYYY-MM-DD' } },
+//   keepsakes: [{ id, type, date, habit?, title? }],  // rare moments, left in the world
+//   grown: { [habitId]: tier },             // growth the user has already seen
+//   seen: [id, ...],                        // one-time notices already shown
+//   archive: { tasks, xp, activeDays, habits: { [habitId]: count }, cutoff },
+//   legacy?: { ... }                        // untouched snapshot of the old prototype data
 // }
 //
-// Everything the UI shows (totals, XP, level, streaks, achievements) is DERIVED
-// from `days` + `archive`, never kept as a running counter, so toggling a task
-// on and off any number of times always gives the same result.
+// Everything shown (totals, XP, level, days showed up, growth, keepsake medals)
+// is DERIVED from `days` + `archive`, never kept as a running counter, so
+// toggling a task on and off any number of times always gives the same result.
+//
+// There are no streaks: missing a day never erases anything. Continuity is
+// measured as "days you showed up" (this month, and in total).
 
-import { addDays, diffDays, isValidKey, weekStart, dayNumber, fromDayNumber } from './dates.js';
+import { addDays, diffDays, isValidKey, weekStart, weekDays } from './dates.js';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const STORAGE_KEY = 'myday.state';
 export const LEGACY_KEYS = ['arch_record_v1', 'bridge_rpg_v1'];
 export const HISTORY_KEEP_DAYS = 400;
 export const XP_PER_TASK = 10;
+export const XP_PER_TASK_MIN = 7; // slightly lower on a Minimum Day — the day itself is never lesser
 export const ALL_DONE_BONUS = 20;
 export const MAX_TITLE = 80;
 
@@ -46,23 +56,26 @@ export const STAGES = [
   { id: 'ancient', min: 100 },
 ];
 
+/** Per-habit growth: lifetime completions needed for each new element in the world. */
+export const GROWTH_STEPS = [1, 3, 7, 14, 30, 60];
+
 export const ACHIEVEMENTS = [
-  { id: 'first-day', icon: 'sunrise', test: (s) => s.activeDays >= 1 },
-  { id: 'streak-7', icon: 'sprout', test: (s) => s.bestStreak >= 7 },
-  { id: 'streak-14', icon: 'flower', test: (s) => s.bestStreak >= 14 },
-  { id: 'streak-30', icon: 'tree', test: (s) => s.bestStreak >= 30 },
-  { id: 'streak-100', icon: 'mountain', test: (s) => s.bestStreak >= 100 },
-  { id: 'tasks-50', icon: 'star', test: (s) => s.totalTasks >= 50 },
+  { id: 'first-day', test: (s) => s.activeDays >= 1 },
+  { id: 'days-7', test: (s) => s.activeDays >= 7 },
+  { id: 'days-30', test: (s) => s.activeDays >= 30 },
+  { id: 'days-100', test: (s) => s.activeDays >= 100 },
+  { id: 'tasks-50', test: (s) => s.totalTasks >= 50 },
+  { id: 'tasks-250', test: (s) => s.totalTasks >= 250 },
 ];
 
 /** Companions: one starter, two found through progress (checked against derived stats). */
 export const COMPANIONS = [
   { id: 'moji', test: () => true },
-  { id: 'luma', test: (s) => s.bestStreak >= 7 },
+  { id: 'luma', test: (s) => s.activeDays >= 7 },
   { id: 'nori', test: (s) => s.totalTasks >= 50 },
 ];
 
-/** Outfit pieces the buddy unlocks by level. */
+/** Outfit pieces the companion finds by level. */
 export const WARDROBE = [
   { id: 'scarf', level: 2 },
   { id: 'backpack', level: 4 },
@@ -70,7 +83,7 @@ export const WARDROBE = [
   { id: 'cape', level: 9 },
 ];
 
-const emptyArchive = () => ({ tasks: 0, xp: 0, activeDays: 0, bestStreak: 0, runAtCutoff: 0, cutoff: null });
+const emptyArchive = () => ({ tasks: 0, xp: 0, activeDays: 0, habits: {}, cutoff: null });
 
 export function createState() {
   return {
@@ -80,6 +93,9 @@ export function createState() {
     buddy: 'moji',
     routines: DEFAULT_ROUTINES.map((r) => ({ ...r })),
     days: {},
+    reflections: {},
+    keepsakes: [],
+    grown: {},
     seen: [],
     archive: emptyArchive(),
   };
@@ -90,21 +106,25 @@ export function createState() {
 
 const str = (v) => (typeof v === 'string' ? v : null);
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
-const cleanTitle = (v) => {
+export const cleanTitle = (v) => {
   const s = str(v);
-  return s ? s.trim().slice(0, MAX_TITLE) : null;
+  const t = s ? s.trim().slice(0, MAX_TITLE) : null;
+  return t || null;
 };
+const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
 function normItem(raw, kind) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isObj(raw)) return null;
   const id = str(raw.id);
   if (!id) return null;
   const item = { id, kind: raw.kind === 'custom' || raw.kind === 'routine' ? raw.kind : kind };
   const key = str(raw.key);
   const title = cleanTitle(raw.title);
+  const mini = cleanTitle(raw.mini);
   if (key) item.key = key;
   if (title) item.title = title;
   if (!item.key && !item.title) return null;
+  if (mini) item.mini = mini;
   const icon = str(raw.icon);
   if (icon) item.icon = icon;
   return item;
@@ -116,7 +136,7 @@ function uniqueBy(list, f) {
 }
 
 function normDay(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isObj(raw)) return null;
   const items = uniqueBy(
     (Array.isArray(raw.items) ? raw.items : []).map((i) => normItem(i, 'custom')).filter(Boolean),
     (i) => i.id,
@@ -124,52 +144,70 @@ function normDay(raw) {
   const ids = new Set(items.map((i) => i.id));
   const done = [...new Set((Array.isArray(raw.done) ? raw.done : []).filter((id) => ids.has(id)))];
   const day = { items, done };
-  if (raw.frozen === true) day.frozen = true;
+  if (raw.minimum === true) day.minimum = true;
+  if (raw.comeback === true) day.comeback = true;
   return day;
 }
 
+const normRoutines = (list) =>
+  uniqueBy(
+    list.map((r) => normItem(r, 'routine')).filter(Boolean).map(({ kind, ...r }) => r),
+    (r) => r.id,
+  );
+
 export function normalize(raw) {
   const base = createState();
-  if (!raw || typeof raw !== 'object') return base;
+  if (!isObj(raw)) return base;
   const s = migrate(raw);
   // Unknown top-level fields (e.g. written by a newer version) are kept as-is.
   const out = { ...s, ...base };
   out.lang = s.lang === 'en' || s.lang === 'he' ? s.lang : null;
   out.name = cleanTitle(s.name)?.slice(0, 24) || null;
   out.buddy = COMPANIONS.some((c) => c.id === s.buddy) ? s.buddy : 'moji';
-  if (Array.isArray(s.routines)) {
-    out.routines = uniqueBy(
-      s.routines.map((r) => normItem(r, 'routine')).filter(Boolean).map(({ kind, ...r }) => r),
-      (r) => r.id,
-    );
-  }
+  if (Array.isArray(s.routines)) out.routines = normRoutines(s.routines);
   out.days = {};
-  if (s.days && typeof s.days === 'object') {
+  if (isObj(s.days)) {
     for (const [k, v] of Object.entries(s.days)) {
       if (!isValidKey(k)) continue;
       const d = normDay(v);
       if (d) out.days[k] = d;
     }
   }
+  out.reflections = {};
+  if (isObj(s.reflections)) {
+    for (const [k, v] of Object.entries(s.reflections)) {
+      if (!isValidKey(k) || !isObj(v)) continue;
+      out.reflections[k] = { answer: cleanTitle(v.answer), on: isValidKey(v.on) ? v.on : k };
+    }
+  }
+  out.keepsakes = Array.isArray(s.keepsakes)
+    ? uniqueBy(
+        s.keepsakes
+          .filter((k) => isObj(k) && str(k.id) && str(k.type) && isValidKey(k.date))
+          .map((k) => ({ id: k.id, type: k.type, date: k.date, ...(str(k.habit) ? { habit: k.habit } : {}), ...(cleanTitle(k.title) ? { title: cleanTitle(k.title) } : {}) })),
+        (k) => k.id,
+      )
+    : [];
+  out.grown = {};
+  if (isObj(s.grown)) for (const [k, v] of Object.entries(s.grown)) if (Number.isInteger(v) && v >= 0 && v <= GROWTH_STEPS.length) out.grown[k] = v;
   out.seen = Array.isArray(s.seen) ? [...new Set(s.seen.filter((x) => typeof x === 'string'))] : [];
-  const a = s.archive && typeof s.archive === 'object' ? s.archive : {};
-  out.archive = {
-    tasks: num(a.tasks),
-    xp: num(a.xp),
-    activeDays: num(a.activeDays),
-    bestStreak: num(a.bestStreak),
-    runAtCutoff: num(a.runAtCutoff),
-    cutoff: isValidKey(a.cutoff) ? a.cutoff : null,
-  };
-  if (s.legacy && typeof s.legacy === 'object') out.legacy = s.legacy;
+  const a = isObj(s.archive) ? s.archive : {};
+  const habits = {};
+  if (isObj(a.habits)) for (const [k, v] of Object.entries(a.habits)) if (num(v)) habits[k] = num(v);
+  out.archive = { tasks: num(a.tasks), xp: num(a.xp), activeDays: num(a.activeDays), habits, cutoff: isValidKey(a.cutoff) ? a.cutoff : null };
+  if (isObj(s.legacy)) out.legacy = s.legacy;
   out.schema = Math.max(SCHEMA_VERSION, typeof s.schema === 'number' ? s.schema : 0);
   return out;
 }
 
-/** Step-wise schema migrations. Add `N: (s) => s'` entries as the schema grows. */
+/** Step-wise schema migrations. Field validation/defaults live in normalize(). */
 const MIGRATIONS = {
-  // 0: pre-versioned objects — nothing to reshape yet, fields are validated by normalize().
+  // 0 → 1: pre-versioned objects.
   0: (s) => ({ ...s, schema: 1 }),
+  // 1 → 2: streaks & freezes were replaced by "days you showed up"; old frozen
+  // markers and streak archive fields are simply dropped (nothing is lost:
+  // completions, XP and active days are untouched).
+  1: (s) => ({ ...s, schema: 2 }),
 };
 
 export function migrate(raw) {
@@ -188,7 +226,7 @@ export function migrate(raw) {
 // tasks become today's custom tasks. Old XP is carried into the archive so the
 // level is not lost. Old per-day XP history used UTC dates and did not record
 // what was done, so it is kept verbatim for reference but does NOT invent
-// completed days or streaks.
+// completed days.
 
 const LEGACY_SEED_MAP = { 'סידור מיטה': 'r-bed' };
 
@@ -199,7 +237,7 @@ export function importLegacy(legacyRaw, today) {
   const routines = [...s.routines];
   const custom = [];
   for (const [storageKey, raw] of Object.entries(legacyRaw)) {
-    if (!raw || typeof raw !== 'object') continue;
+    if (!isObj(raw)) continue;
     legacy[storageKey] = raw;
     xp = Math.max(xp, num(raw.xp));
     for (const h of Array.isArray(raw.habits) ? raw.habits : []) {
@@ -226,7 +264,14 @@ export function importLegacy(legacyRaw, today) {
 // Day helpers
 
 export const routineItems = (routines) =>
-  routines.map((r) => ({ id: r.id, kind: 'routine', ...(r.key ? { key: r.key } : {}), ...(r.title ? { title: r.title } : {}), icon: r.icon }));
+  routines.map((r) => ({
+    id: r.id,
+    kind: 'routine',
+    ...(r.key ? { key: r.key } : {}),
+    ...(r.title ? { title: r.title } : {}),
+    ...(r.mini ? { mini: r.mini } : {}),
+    icon: r.icon,
+  }));
 
 export function doneCount(day) {
   if (!day) return 0;
@@ -236,20 +281,21 @@ export function doneCount(day) {
 
 export const isActive = (day) => doneCount(day) > 0;
 export const isAllDone = (day) => !!day && day.items.length > 0 && doneCount(day) === day.items.length;
+export const xpPerTask = (day) => (day && day.minimum ? XP_PER_TASK_MIN : XP_PER_TASK);
+export const dayXp = (day) => doneCount(day) * xpPerTask(day) + (isAllDone(day) ? ALL_DONE_BONUS : 0);
 
-/** 'active' | 'frozen' | 'none' */
-export function dayStatus(state, key) {
-  const d = state.days[key];
-  if (isActive(d)) return 'active';
-  if (d && d.frozen) return 'frozen';
-  return 'none';
+/** Most recent day before `today` on which the user showed up. */
+export function lastShowedUp(state, today) {
+  return Object.keys(state.days)
+    .filter((k) => k < today && isActive(state.days[k]))
+    .sort()
+    .pop() || null;
 }
-
-const dayXp = (day) => doneCount(day) * XP_PER_TASK + (isAllDone(day) ? ALL_DONE_BONUS : 0);
 
 /**
  * Make sure today's record exists. A new day gets the current routines plus
- * any unfinished custom tasks from the most recent earlier day.
+ * any unfinished custom tasks from the most recent earlier day. After a gap
+ * (at least one day without showing up) it opens as a gentle Minimum Day.
  */
 export function ensureDay(state, today) {
   if (state.days[today]) return state;
@@ -259,10 +305,14 @@ export function ensureDay(state, today) {
     .pop();
   const prev = prevKey ? state.days[prevKey] : null;
   const carried = prev ? prev.items.filter((i) => i.kind === 'custom' && !prev.done.includes(i.id)) : [];
-  return {
-    ...state,
-    days: { ...state.days, [today]: { items: [...routineItems(state.routines), ...carried.map((i) => ({ ...i }))], done: [] } },
-  };
+  const last = lastShowedUp(state, today);
+  const comeback = !!last && diffDays(last, today) >= 2;
+  const day = { items: [...routineItems(state.routines), ...carried.map((i) => ({ ...i }))], done: [] };
+  if (comeback) {
+    day.minimum = true;
+    day.comeback = true;
+  }
+  return { ...state, days: { ...state.days, [today]: day } };
 }
 
 export function toggleItem(state, today, id) {
@@ -273,12 +323,19 @@ export function toggleItem(state, today, id) {
   return { ...s, days: { ...s.days, [today]: { ...day, done } } };
 }
 
-export function addCustom(state, today, title, id = `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, icon) {
+export function setMinimum(state, today, on) {
+  const s = ensureDay(state, today);
+  const { minimum, ...rest } = s.days[today];
+  return { ...s, days: { ...s.days, [today]: on ? { ...rest, minimum: true } : rest } };
+}
+
+export function addCustom(state, today, title, id = `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, icon, mini) {
   const t = cleanTitle(title);
   if (!t) return state;
   const s = ensureDay(state, today);
   const day = s.days[today];
-  const item = { id, kind: 'custom', title: t, ...(typeof icon === 'string' ? { icon } : {}) };
+  const m = cleanTitle(mini);
+  const item = { id, kind: 'custom', title: t, ...(typeof icon === 'string' ? { icon } : {}), ...(m ? { mini: m } : {}) };
   return { ...s, days: { ...s.days, [today]: { ...day, items: [...day.items, item] } } };
 }
 
@@ -296,10 +353,7 @@ export function removeItem(state, today, id) {
  * past days are left exactly as they were.
  */
 export function setRoutines(state, today, routines) {
-  const clean = uniqueBy(
-    routines.map((r) => normItem(r, 'routine')).filter(Boolean).map(({ kind, ...r }) => r),
-    (r) => r.id,
-  );
+  const clean = normRoutines(routines);
   const s = ensureDay({ ...state, routines: clean }, today);
   const day = s.days[today];
   const customs = day.items.filter((i) => i.kind === 'custom');
@@ -309,114 +363,46 @@ export function setRoutines(state, today, routines) {
 }
 
 // ---------------------------------------------------------------------------
-// Streaks & freezes
-//
-// A day "counts" when at least one task was completed. The chain survives a
-// frozen day (it is skipped, never counted). Today never breaks the chain —
-// until today is over, the chain may still end yesterday.
-//
-// FREEZE RULE (deterministic):
-//  • A freeze protects exactly ONE missed day: the gap between the last
-//    counted/frozen day ("anchor") and today must be exactly one day.
-//  • At most one freeze per Monday–Sunday local week (the week of the
-//    protected day).
-//  • It only protects an existing chain (anchor is part of a chain ≥ 1).
-//  • Two or more consecutive missed days: no freeze is spent; the chain
-//    restarts gently.
-//  • A frozen day adds nothing: no completions, tasks or XP.
-//  • It is evaluated when a day begins (app open / date rollover), so it is
-//    idempotent: re-running it changes nothing.
+// Continuity: days you showed up. Nothing is ever lost by missing a day.
 
-export function freezeWeeksUsed(state) {
-  return new Set(Object.keys(state.days).filter((k) => state.days[k].frozen).map(weekStart));
+export function showedUpInMonth(state, today) {
+  const prefix = today.slice(0, 7);
+  return Object.keys(state.days).filter((k) => k.startsWith(prefix) && k <= today && isActive(state.days[k])).length;
 }
 
-export function applyFreezes(state, today) {
-  const anchor = Object.keys(state.days)
-    .filter((k) => k < today && dayStatus(state, k) !== 'none')
-    .sort()
-    .pop();
-  if (!anchor) return { state, frozen: null };
-  const gap = diffDays(anchor, today) - 1;
-  if (gap !== 1) return { state, frozen: null };
-  const missed = addDays(anchor, 1);
-  if (runEndingAt(state, anchor) < 1) return { state, frozen: null };
-  if (freezeWeeksUsed(state).has(weekStart(missed))) return { state, frozen: null };
-  const prev = state.days[missed] || { items: [], done: [] };
-  return {
-    state: { ...state, days: { ...state.days, [missed]: { ...prev, frozen: true } } },
-    frozen: missed,
-  };
-}
-
-function firstTrackedDay(state) {
-  const keys = Object.keys(state.days).sort();
-  const cut = state.archive.cutoff;
-  if (cut) return addDays(cut, 1);
-  return keys[0] || null;
-}
-
-/** Chain length (counted days) ending at `key`, walking back through frozen days. */
-export function runEndingAt(state, key) {
-  const first = firstTrackedDay(state);
-  if (!first) return 0;
-  let run = 0;
-  let k = key;
-  while (k >= first) {
-    const st = dayStatus(state, k);
-    if (st === 'none') return run;
-    if (st === 'active') run += 1;
-    k = addDays(k, -1);
+/** Lifetime completions per habit id (routines and custom tasks alike). */
+export function habitCounts(state) {
+  const counts = { ...state.archive.habits };
+  for (const d of Object.values(state.days)) {
+    const ids = new Set(d.items.map((i) => i.id));
+    for (const id of d.done) if (ids.has(id)) counts[id] = (counts[id] || 0) + 1;
   }
-  // Walked past everything kept: continue with the chain that was archived.
-  return run + (state.archive.cutoff ? state.archive.runAtCutoff : 0);
+  return counts;
 }
 
-export function currentStreak(state, today) {
-  if (dayStatus(state, today) === 'active') return runEndingAt(state, today);
-  return runEndingAt(state, addDays(today, -1));
-}
-
-/** Longest chain in the kept history, including archived chains. */
-function scanRuns(state, from, to, initialRun) {
-  let run = initialRun;
-  let best = initialRun;
-  for (let n = dayNumber(from); n <= dayNumber(to); n++) {
-    const k = fromDayNumber(n);
-    const st = dayStatus(state, k);
-    if (st === 'active') run += 1;
-    else if (st === 'none' && k !== to) run = 0;
-    best = Math.max(best, run);
-  }
-  return { best, run };
-}
-
-export function bestStreak(state, today) {
-  const first = firstTrackedDay(state);
-  if (!first || first > today) return state.archive.bestStreak;
-  const { best } = scanRuns(state, first, today, state.archive.cutoff ? state.archive.runAtCutoff : 0);
-  return Math.max(best, state.archive.bestStreak);
+export function growthTier(count) {
+  return GROWTH_STEPS.filter((n) => count >= n).length;
 }
 
 // ---------------------------------------------------------------------------
 // Pruning: keep a bounded window of day records, fold older ones into archive.
 
 export function prune(state, today, keep = HISTORY_KEEP_DAYS) {
-  const cutoff = addDays(today, -keep);
+  // Never prune into the current month ("showed up this month" stays exact).
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const byAge = addDays(today, -keep);
+  const cutoff = byAge < monthStart ? byAge : addDays(monthStart, -1);
   const old = Object.keys(state.days).filter((k) => k <= cutoff).sort();
   if (!old.length) return state;
-  const first = firstTrackedDay(state);
-  const { best, run } = scanRuns(state, first, cutoff, state.archive.cutoff ? state.archive.runAtCutoff : 0);
-  const archive = { ...state.archive };
+  const archive = { ...state.archive, habits: { ...state.archive.habits } };
   for (const k of old) {
     const d = state.days[k];
     archive.tasks += doneCount(d);
     archive.xp += dayXp(d);
     archive.activeDays += isActive(d) ? 1 : 0;
+    const ids = new Set(d.items.map((i) => i.id));
+    for (const id of d.done) if (ids.has(id)) archive.habits[id] = (archive.habits[id] || 0) + 1;
   }
-  archive.bestStreak = Math.max(archive.bestStreak, best);
-  // `run` counts through `cutoff`; if cutoff itself was a plain missed day the chain is 0.
-  archive.runAtCutoff = dayStatus(state, cutoff) === 'none' ? 0 : run;
   archive.cutoff = cutoff;
   const days = { ...state.days };
   for (const k of old) delete days[k];
@@ -425,9 +411,9 @@ export function prune(state, today, keep = HISTORY_KEEP_DAYS) {
 
 /** Everything that should happen when a (new) day is opened. */
 export function prepareDay(state, today) {
-  const { state: s1, frozen } = applyFreezes(state, today);
-  const s2 = prune(ensureDay(s1, today), today);
-  return { state: s2, frozen };
+  const isNew = !state.days[today];
+  const s = prune(ensureDay(state, today), today);
+  return { state: s, comeback: isNew && !!s.days[today].comeback };
 }
 
 // ---------------------------------------------------------------------------
@@ -458,39 +444,36 @@ export function stats(state, today) {
   let totalTasks = state.archive.tasks;
   let xp = state.archive.xp;
   let activeDays = state.archive.activeDays;
-  let freezes = 0;
   for (const d of Object.values(state.days)) {
     totalTasks += doneCount(d);
     xp += dayXp(d);
     activeDays += isActive(d) ? 1 : 0;
-    freezes += d.frozen ? 1 : 0;
   }
   const day = state.days[today] || { items: [], done: [] };
+  const week = weekDays(today).filter((k) => k <= today && isActive(state.days[k])).length;
   const s = {
     totalTasks,
     xp,
     activeDays,
-    freezes,
+    month: showedUpInMonth(state, today),
+    week,
     todayDone: doneCount(day),
     todayTotal: day.items.length,
     allDone: isAllDone(day),
-    current: currentStreak(state, today),
-    bestStreak: bestStreak(state, today),
+    minimum: !!day.minimum,
+    comeback: !!day.comeback,
     level: levelFromXp(xp),
     stage: stageFor(totalTasks),
-    freezeAvailable: !freezeWeeksUsed(state).has(weekStart(today)),
+    habits: habitCounts(state),
   };
-  s.achievements = ACHIEVEMENTS.map((a) => ({ id: a.id, icon: a.icon, unlocked: a.test(s) }));
+  s.achievements = ACHIEVEMENTS.map((a) => ({ id: a.id, unlocked: a.test(s) }));
   s.companions = COMPANIONS.map((c) => ({ id: c.id, unlocked: c.test(s) }));
   return s;
 }
 
-/** Achievements that are unlocked now but whose toast has never been shown. */
+/** Companions found but not yet announced (medals unlock quietly). */
 export function newlyUnlocked(state, st) {
-  return [
-    ...st.achievements.filter((a) => a.unlocked && !state.seen.includes(a.id)).map((a) => a.id),
-    ...st.companions.filter((c) => c.id !== 'moji' && c.unlocked && !state.seen.includes(`buddy-${c.id}`)).map((c) => `buddy-${c.id}`),
-  ];
+  return st.companions.filter((c) => c.id !== 'moji' && c.unlocked && !state.seen.includes(`buddy-${c.id}`)).map((c) => `buddy-${c.id}`);
 }
 
 export function markSeen(state, ids) {
@@ -547,3 +530,5 @@ export function save(storage, state) {
     return false;
   }
 }
+
+export { weekStart };

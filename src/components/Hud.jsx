@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useRef, useState } from 'react';
-import { SlidersHorizontal, Snowflake } from 'lucide-react';
-import { Flame, flameTier } from './Art.jsx';
+import { SlidersHorizontal } from 'lucide-react';
+import { MissionIcon } from './Art.jsx';
 import Plant from './Plant.jsx';
 
 /** Level ring: the XP orbs fly into it. One JS tween drives the fill so it also works in Safari. */
@@ -85,8 +85,8 @@ const LevelRing = forwardRef(function LevelRing({ t, level, ping }, ref) {
   );
 });
 
-const Hud = forwardRef(function Hud({ t, hello, title, level, ping, chain, frozen, stage, stageLabel, onSettings, onChain, onGrowth }, ringRef) {
-  const tier = flameTier(chain);
+const Hud = forwardRef(function Hud({ t, hello, title, level, ping, month, stage, stageLabel, onSettings, onMonth, onGrowth }, ringRef) {
+  const days = month === 0 ? t('chip.begin') : month === 1 ? t('chip.days1') : t('chip.days', { n: month });
   return (
     <header className="hud">
       <div className="flex items-start gap-3">
@@ -99,13 +99,13 @@ const Hud = forwardRef(function Hud({ t, hello, title, level, ping, chain, froze
         </button>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
-        <button type="button" className="glass-chip" onClick={onChain} aria-label={`${t('streak.current')}: ${chain}`}>
-          <span className="chip-ico" style={{ background: frozen ? 'linear-gradient(180deg,#E6F6FF,#CFEAFE)' : 'linear-gradient(180deg,#FFF3E2,#FFE0C4)' }}>
-            {frozen ? <Snowflake size={20} color="#38BDF8" /> : <Flame tier={tier} size={24} dim={chain === 0} />}
+        <button type="button" className="glass-chip" onClick={onMonth} aria-label={`${t('chip.month')}: ${days}`}>
+          <span className="chip-ico" style={{ background: 'linear-gradient(180deg,#FFF7E0,#FFE9B8)' }}>
+            <MissionIcon kind="sun" size={26} />
           </span>
           <span className="flex flex-col items-start leading-tight">
-            <b>{chain === 1 ? t('chip.day') : chain > 0 ? t('chip.days', { n: chain }) : t('chip.start')}</b>
-            <small>{t('chip.chain')}</small>
+            <b>{days}</b>
+            <small>{t('chip.month')}</small>
           </span>
         </button>
         <LevelRing ref={ringRef} t={t} level={level} ping={ping} />

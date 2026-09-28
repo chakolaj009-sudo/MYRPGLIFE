@@ -46,6 +46,17 @@ const doneToday = async (page) => {
   const days = Object.keys(s.days).sort();
   return s.days[days[days.length - 1]].done.length;
 };
+/** Poll until the level ring shows `label` (XP lands after the companion walks + orbs fly). */
+const xpIs = async (page, label, ms = 10000) => {
+  const t0 = Date.now();
+  let last = '';
+  while (Date.now() - t0 < ms) {
+    last = await page.getByRole('progressbar').getAttribute('aria-label');
+    if (last === label) return true;
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`expected XP "${label}", got "${last}"`);
+};
 const worldReady = (page) => page.waitForFunction(() => !!window.__world, null, { timeout: 15000 });
 
 await check('loads: PWA meta, 3D world, hand of 4 cards, no horizontal scroll', async (page) => {
@@ -124,9 +135,9 @@ await check('drag spins the island (inspect from every side)', async (page) => {
   await worldReady(page);
   await settle(page);
   const before = await page.evaluate(() => window.__world.spin.rotation.y);
-  await page.mouse.move(200, 420);
+  await page.mouse.move(120, 330);
   await page.mouse.down();
-  await page.mouse.move(330, 425, { steps: 8 });
+  await page.mouse.move(280, 335, { steps: 8 });
   await page.mouse.up();
   await settle(page, 300);
   const after = await page.evaluate(() => window.__world.spin.rotation.y);
@@ -147,8 +158,7 @@ await check('XP is derived: play/undo repeatedly never inflates it', async (page
   }
   await cards(page).first().click();
   await settle(page, 3200);
-  const label = await page.getByRole('progressbar').getAttribute('aria-label');
-  assert(label === '10 / 50 XP', `XP drifted: ${label}`);
+  await xpIs(page, '10 / 50 XP');
 });
 
 await check('add a custom task from the + card, persists, removable', async (page) => {
@@ -178,8 +188,7 @@ await check('all done → celebration card, bonus and level 2', async (page) => 
   await settle(page, 9000); // companion does each mission in turn
   assert(await page.getByText('All done for today').isVisible(), 'no completion card');
   assert(await page.getByText('+20 XP day bonus').isVisible(), 'no bonus');
-  const label = await page.getByRole('progressbar').getAttribute('aria-label');
-  assert(label === '10 / 75 XP', `expected level 2 with 10 XP, got ${label}`);
+  await xpIs(page, '10 / 75 XP');
 });
 
 await check('local midnight rollover while open (Asia/Jerusalem)', async (page) => {
@@ -194,36 +203,10 @@ await check('local midnight rollover while open (Asia/Jerusalem)', async (page) 
   assert(s.days['2026-09-27']?.done.length === 1, 'yesterday lost');
   assert(s.days['2026-09-28'], 'no record for the new local date');
   assert((await cards(page).count()) === 4, 'new day should deal a fresh hand');
-  assert(await page.getByRole('button', { name: 'Chain: 1' }).isVisible(), 'chain chip should show 1');
+  assert(await page.getByRole('button', { name: 'This month: 1 day' }).isVisible(), 'month chip should show 1 day');
 });
 
-await check('streak freeze applied on reopen after one missed day, shown in the week sheet', async (page, ctx) => {
-  await page.clock.install({ time: new Date('2026-09-22T09:00:00+03:00') }); // Tue
-  await page.goto(URL);
-  await settle(page, 1500);
-  await cards(page).first().click();
-  await settle(page, 2500);
-  await page.close();
-  const p2 = await ctx.newPage();
-  await p2.clock.install({ time: new Date('2026-09-24T09:00:00+03:00') }); // Thu, Wed missed
-  await p2.goto(URL);
-  await settle(p2, 1500);
-  const s = await state(p2);
-  assert(s.days['2026-09-23']?.frozen === true, 'freeze not recorded on the missed date');
-  await p2.getByRole('button', { name: /^Chain:/ }).click();
-  assert(await p2.getByText('A freeze kept your chain safe yesterday.').isVisible(), 'freeze message missing');
-  assert((await p2.locator('li[aria-label*="Freeze"]').count()) === 1, 'week should show one freeze');
-  await p2.getByRole('button', { name: 'Close' }).click();
-  await cards(p2).first().click();
-  await settle(p2, 2500);
-  assert(await p2.getByRole('button', { name: 'Chain: 2' }).isVisible(), 'chain should continue through the freeze');
-  await p2.reload();
-  await settle(p2, 1200);
-  const s2 = await state(p2);
-  assert(Object.values(s2.days).filter((d) => d.frozen).length === 1, 'freeze must be idempotent');
-});
-
-await check('two missed days: no freeze spent, gentle fresh start', async (page, ctx) => {
+await check('comeback after a gap: opens gently into Minimum day, nothing shown as lost', async (page, ctx) => {
   await page.clock.install({ time: new Date('2026-09-21T09:00:00+03:00') });
   await page.goto(URL);
   await settle(page, 1500);
@@ -231,12 +214,42 @@ await check('two missed days: no freeze spent, gentle fresh start', async (page,
   await settle(page, 2500);
   await page.close();
   const p2 = await ctx.newPage();
-  await p2.clock.install({ time: new Date('2026-09-24T09:00:00+03:00') });
+  await p2.clock.install({ time: new Date('2026-09-24T09:00:00+03:00') }); // two days missed
   await p2.goto(URL);
-  await settle(p2, 1500);
+  await settle(p2, 1600);
   const s = await state(p2);
-  assert(!Object.values(s.days).some((d) => d.frozen), 'no freeze expected');
-  assert(await p2.getByRole('button', { name: 'Chain: 0' }).isVisible(), 'chain should restart');
+  assert(s.days['2026-09-24']?.minimum && s.days['2026-09-24']?.comeback, 'comeback day should be a Minimum day');
+  await p2.getByText("You're here. That's the whole thing.").waitFor({ timeout: 6000 });
+  assert((await p2.getByRole('button', { name: 'Minimum day' }).getAttribute('aria-pressed')) === 'true', 'toggle should be on');
+  assert((await handTitles(p2)).includes('Rinse your mouth'), 'tiny versions should be shown');
+  assert(await p2.getByRole('button', { name: 'This month: 1 day' }).isVisible(), 'showed-up days are never erased');
+  const text = await p2.locator('body').innerText();
+  assert(!/streak|chain|lost|missed|broke/i.test(text), 'no loss language on screen');
+  await cards(p2).first().click();
+  await settle(p2, 2600);
+  assert(await p2.getByRole('button', { name: 'This month: 2 days' }).isVisible(), 'minimum day counts fully');
+  await xpIs(p2, '17 / 50 XP');
+});
+
+await check('Minimum day toggle: tiny versions, softer world, counts fully', async (page) => {
+  await page.goto(URL + '?debug');
+  await worldReady(page);
+  await settle(page);
+  await page.getByRole('button', { name: 'Minimum day' }).click();
+  await settle(page, 400);
+  const titles = await handTitles(page);
+  assert(titles.join('|') === 'Rinse your mouth|Straighten the pillow|Read one sentence|Three slow breaths', `tiny titles: ${titles}`);
+  assert(await page.evaluate(() => window.__world.soft === true), 'world should soften');
+  assert((await cards(page).first().locator('.card-xp').innerText()).includes('7'), 'card shows +7');
+  await cards(page).first().click();
+  await settle(page, 3200);
+  await xpIs(page, '7 / 50 XP');
+  assert(await page.getByRole('button', { name: 'This month: 1 day' }).isVisible(), 'minimum day counts as showing up');
+  await page.getByRole('button', { name: 'Minimum day' }).click();
+  await settle(page, 300);
+  assert((await handTitles(page)).includes('Make the bed'), 'full versions back');
+  const s = await state(page);
+  assert(Object.values(s.days)[0].minimum === undefined, 'toggle off persisted');
 });
 
 await check('imports legacy Life RPG data and keeps the old keys', async (page) => {
@@ -249,8 +262,7 @@ await check('imports legacy Life RPG data and keeps the old keys', async (page) 
   assert((await handTitles(page)).includes('מקלחת קרה'), 'legacy habit not imported');
   assert((await cards(page).count()) === 5, 'expected 4 defaults + 1 imported');
   assert(await page.evaluate(() => !!localStorage.getItem('arch_record_v1')), 'legacy key deleted');
-  const label = await page.getByRole('progressbar').getAttribute('aria-label');
-  assert(label === '15 / 100 XP', `legacy XP not carried (${label})`);
+  await xpIs(page, '15 / 100 XP');
 });
 
 await check('corrupt storage recovers and keeps a backup', async (page) => {
@@ -288,7 +300,7 @@ await check('settings: routine editor rename/add/delete apply to today', async (
   await page.goto(URL);
   await settle(page, 1500);
   await page.getByRole('button', { name: 'Settings and routines' }).click();
-  await page.getByRole('textbox', { name: 'Read one page' }).fill('Read two pages');
+  await page.getByRole('textbox', { name: 'Read one page', exact: true }).fill('Read two pages');
   await page.getByRole('button', { name: 'Delete routine: Make the bed' }).click();
   await page.getByPlaceholder('Add a routine…').fill('Stretch');
   await page.keyboard.press('Enter');
@@ -296,6 +308,13 @@ await check('settings: routine editor rename/add/delete apply to today', async (
   await settle(page, 600);
   const titles = await handTitles(page);
   assert(titles.includes('Read two pages') && titles.includes('Stretch') && !titles.includes('Make the bed'), `hand: ${titles}`);
+  // tiny version editing
+  await page.getByRole('button', { name: 'Settings and routines' }).click();
+  await page.getByRole('textbox', { name: 'Tiny version: Read two pages' }).fill('Read one line');
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByRole('button', { name: 'Minimum day' }).click();
+  await settle(page, 300);
+  assert((await handTitles(page)).includes('Read one line'), 'custom tiny version not used');
   await page.reload();
   await settle(page, 1500);
   assert((await cards(page).count()) === 4, 'routine edit not persisted');
@@ -312,7 +331,7 @@ await check('companions: locked ones cannot be picked; name shows in HUD', async
   assert(await page.getByRole('heading', { name: 'Dana' }).isVisible(), 'name not shown');
 });
 
-await check('Luma unlocks at a 7-day chain and appears in the world', async (page) => {
+await check('Luma appears after showing up on 7 days', async (page) => {
   await page.clock.install({ time: new Date('2026-09-20T09:00:00+03:00') });
   await page.goto(URL + '?debug');
   await settle(page, 1500);

@@ -33,7 +33,7 @@ export function Sheet({ title, onClose, children, t }) {
   );
 }
 
-export function PlayedSheet({ t, items, onUndo, onClose }) {
+export function PlayedSheet({ t, items, minimum, onUndo, onClose }) {
   return (
     <Sheet title={t('today.doneDrawer', { n: items.length })} onClose={onClose} t={t}>
       <p className="mb-3 text-[13px] text-ink2">{t('played.hint')}</p>
@@ -45,7 +45,7 @@ export function PlayedSheet({ t, items, onUndo, onClose }) {
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px]" style={{ background: MISSION_TINT[k] }}>
                 <MissionIcon kind={k} size={24} />
               </span>
-              <span className="min-w-0 flex-1 text-[15px] font-semibold">{itemTitle(t, item)}</span>
+              <span className="min-w-0 flex-1 text-[15px] font-semibold">{itemTitle(t, item, minimum)}</span>
               <button type="button" onClick={() => onUndo(item.id)} className="flex min-h-11 items-center gap-1.5 rounded-full bg-bg px-3 text-sm font-semibold text-ink2">
                 <RotateCcw size={15} /> {t('today.undoShort')}
               </button>
@@ -59,6 +59,7 @@ export function PlayedSheet({ t, items, onUndo, onClose }) {
 
 export function AddSheet({ t, onAdd, onClose }) {
   const [title, setTitle] = useState('');
+  const [mini, setMini] = useState('');
   const [icon, setIcon] = useState('star');
   const input = useRef(null);
   useEffect(() => {
@@ -69,7 +70,7 @@ export function AddSheet({ t, onAdd, onClose }) {
     e.preventDefault();
     const v = title.trim();
     if (!v) return;
-    onAdd(v, icon);
+    onAdd(v, icon, mini.trim() || null);
     onClose();
   };
   return (
@@ -89,6 +90,19 @@ export function AddSheet({ t, onAdd, onClose }) {
           autoComplete="off"
           autoCapitalize="sentences"
           className="h-14 w-full rounded-2xl bg-card px-4 text-base text-ink shadow-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+        <label className="eyebrow mb-2 mt-4 block" htmlFor="new-task-mini">
+          {t('min.tiny')}
+        </label>
+        <input
+          id="new-task-mini"
+          value={mini}
+          onChange={(e) => setMini(e.target.value)}
+          placeholder={t('min.tinyPh')}
+          maxLength={MAX_TITLE}
+          enterKeyHint="done"
+          autoComplete="off"
+          className="h-12 w-full rounded-2xl bg-card px-4 text-base text-ink shadow-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary"
         />
         <p className="eyebrow mb-2 mt-4">{t('add.icon')}</p>
         <div className="grid grid-cols-7 gap-1.5" role="radiogroup" aria-label={t('add.icon')}>

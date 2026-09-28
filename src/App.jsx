@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Sparkles, Star } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useStore } from './lib/useStore.js';
 import { detectLang, makeT, QUOTES, safeLocale } from './lib/i18n.js';
-import { addDays, dayNumber, keyToLocalDate } from './domain/dates.js';
+import { dayNumber, keyToLocalDate } from './domain/dates.js';
 import {
-  addCustom, ALL_DONE_BONUS, levelFromXp, markSeen, newlyUnlocked, removeItem, setLang, setProfile, setRoutines, stats, toggleItem, WARDROBE, XP_PER_TASK,
+  addCustom, ALL_DONE_BONUS, levelFromXp, markSeen, newlyUnlocked, removeItem, setLang, setMinimum, setProfile, setRoutines, stats, toggleItem,
+  WARDROBE, xpPerTask,
 } from './domain/model.js';
 import { flyXp, floatText, prefersReducedMotion, sparkleBurst, haptic } from './lib/fx.js';
-import { phaseFor } from './components/Scene.jsx';
+import { phaseFor } from './lib/ambient.js';
 import { CompanionArt } from './components/Companion.jsx';
 import { iconKey } from './components/Art.jsx';
 import WorldView from './components/WorldView.jsx';
@@ -65,11 +66,11 @@ export default function App() {
     document.title = t('app.name');
   }, [lang, t]);
 
-  // ---------------------------------------------------------------- toasts & speech bubble
+  // ---------------------------------------------------------------- toasts (rare) & companion speech
   const [toasts, setToasts] = useState([]);
-  const toast = useCallback((x, ms = 3200) => {
+  const toast = useCallback((x, ms = 3600) => {
     const id = Math.random().toString(36).slice(2);
-    setToasts((l) => [...l.slice(-2), { ...x, id }]);
+    setToasts((l) => [...l.slice(-1), { ...x, id }]);
     if (ms) setTimeout(() => setToasts((l) => l.filter((y) => y.id !== id)), ms);
   }, []);
   const dismiss = (id) => setToasts((l) => l.filter((y) => y.id !== id));
@@ -92,16 +93,19 @@ export default function App() {
   const [leaving, setLeaving] = useState({});
   const [walking, setWalking] = useState({});
   const shownLevel = levelFromXp(heldXp ?? st.xp);
+  const xpEach = xpPerTask(day);
 
   const play = useCallback(
     (id, cardEl) => {
       let prevXp = 0;
       let already = false;
+      let gain = 0;
       commit((s, k) => {
         const d = s.days[k];
         already = !!d && d.done.includes(id);
         if (already) return s;
         prevXp = stats(s, k).xp;
+        gain = xpPerTask(d);
         return toggleItem(s, k, id);
       });
       if (already) {
@@ -124,10 +128,9 @@ export default function App() {
         setWalking(({ [id]: _, ...rest }) => rest);
         if (reduce) return;
         const from = (hasWorld && world.current.screenPoint(id)) || fromCard;
-        const to = center(ringRef.current);
-        floatText(from, `+${XP_PER_TASK} XP`);
+        floatText(from, `+${gain} XP`);
         say(t(`say.cheer.${Math.floor(Math.random() * 4)}`), 1500);
-        flyXp(from, to, { count: 9 }).then(() => {
+        flyXp(from, center(ringRef.current), { count: 9 }).then(() => {
           flights.current -= 1;
           if (flights.current === 0) setHeldXp(null);
           setPing((p) => p + 1);
@@ -137,8 +140,12 @@ export default function App() {
     [commit, say, t],
   );
   const undo = useCallback((id) => commit((s, k) => (s.days[k]?.done.includes(id) ? toggleItem(s, k, id) : s)), [commit]);
-  const add = useCallback((title, icon) => commit((s, k) => addCustom(s, k, title, undefined, icon)), [commit]);
+  const add = useCallback((title, icon, mini) => commit((s, k) => addCustom(s, k, title, undefined, icon, mini)), [commit]);
   const remove = useCallback((id) => commit((s, k) => removeItem(s, k, id)), [commit]);
+  const toggleMinimum = useCallback(() => {
+    haptic(8);
+    commit((s, k) => setMinimum(s, k, !s.days[k]?.minimum));
+  }, [commit]);
 
   // World objects mirror today's missions; a mission stays "to do" in the
   // world until the companion has walked over and done it.
@@ -147,36 +154,31 @@ export default function App() {
     [day, walking],
   );
 
-  // ---------------------------------------------------------------- level-ups & wardrobe
+  // ---------------------------------------------------------------- level-ups: the companion finds outfit pieces
   const prevLevel = useRef(shownLevel.level);
   useEffect(() => {
     const lv = shownLevel.level;
     if (lv > prevLevel.current) {
       const piece = WARDROBE.find((w) => w.level === lv);
-      toast({
-        icon: <Star size={17} className="text-amber" fill="currentColor" />,
-        text: piece ? `${t('levelup', { n: lv })} ${t(`wear.${piece.id}`, { name: buddyName })}` : t('levelup', { n: lv }),
-      });
+      if (piece) setTimeout(() => say(t('wear.found', { name: buddyName, item: t(`wear.${piece.id}`) }), 3000), 700);
     }
     prevLevel.current = lv;
-  }, [shownLevel.level, t, toast, buddyName]);
+  }, [shownLevel.level, t, say, buddyName]);
   const wearKey = WARDROBE.filter((w) => shownLevel.level >= w.level)
     .map((w) => w.id)
     .join(',');
   const wear = useMemo(() => (wearKey ? wearKey.split(',') : []), [wearKey]);
 
-  // ---------------------------------------------------------------- keepsakes & new friends
+  // ---------------------------------------------------------------- a new friend (rare)
   useEffect(() => {
     const ids = newlyUnlocked(state, st);
     if (!ids.length) return;
     commit((s) => markSeen(s, ids));
     ids.forEach((id, i) =>
       setTimeout(() => {
-        if (id.startsWith('buddy-')) {
-          const sp = id.slice(6);
-          toast({ icon: <CompanionArt species={sp} size={26} mood="happy" />, text: t('buddy.found', { name: t(`buddy.${sp}`) }) }, 4200);
-        } else toast({ icon: <Sparkles size={17} className="text-amber" />, text: t('ach.unlocked', { name: t(`ach.${id}`) }) });
-      }, 1600 + i * 800),
+        const sp = id.slice(6);
+        toast({ icon: <CompanionArt species={sp} size={26} mood="happy" />, text: t('buddy.found', { name: t(`buddy.${sp}`) }) }, 4200);
+      }, 1600 + i * 900),
     );
   }, [state, st, commit, t, toast]);
 
@@ -197,13 +199,15 @@ export default function App() {
     if (!st.allDone) wasAllDone.current = false;
   }, [st.allDone, walkingNow, say, t]);
 
-  // ---------------------------------------------------------------- hello + thought of the day
+  // ---------------------------------------------------------------- opening line + thought of the day
+  // After a gap: one gentle line, nothing about what was missed.
   const n = dayNumber(today);
   const quotes = QUOTES[lang] || QUOTES.en;
   const quote = quotes[((n % quotes.length) + quotes.length) % quotes.length];
   useEffect(() => {
-    const a = setTimeout(() => say(st.allDone ? t('say.allDone') : st.todayDone ? t('say.back') : t('say.tap.3'), 2200), 900);
-    const b = setTimeout(() => say(t('bubble.quote', { q: quote }), 5200), 3400);
+    const first = st.comeback && !st.todayDone ? t('say.comeback') : st.allDone ? t('say.allDone') : st.todayDone ? t('say.back') : t('say.tap.3');
+    const a = setTimeout(() => say(first, st.comeback ? 4200 : 2200), 900);
+    const b = st.comeback ? 0 : setTimeout(() => say(t('bubble.quote', { q: quote }), 5200), 3400);
     return () => {
       clearTimeout(a);
       clearTimeout(b);
@@ -219,15 +223,8 @@ export default function App() {
     return () => window.removeEventListener('sw-need-refresh', onNeed);
   }, [t, toast]);
 
-  // ---------------------------------------------------------------- copy
+  // ---------------------------------------------------------------- layout
   const praise = t(`done.praise.${((n % 4) + 4) % 4}`);
-  const yesterdayFrozen = !!state.days[addDays(today, -1)]?.frozen;
-  const todayActive = st.todayDone > 0;
-  let chainText;
-  if (yesterdayFrozen && !todayActive) chainText = t('chain.frozen');
-  else if (todayActive) chainText = st.current <= 1 ? t('chain.first') : t('chain.going', { n: st.current });
-  else if (st.current > 0) chainText = t('chain.waiting', { n: st.current });
-  else chainText = t('chain.fresh');
   const dateLabel = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(keyToLocalDate(today));
   const greet = t(greetingKey(hour));
   const header = state.name ? { hello: `${greet},`, title: state.name } : { hello: dateLabel, title: greet };
@@ -239,7 +236,7 @@ export default function App() {
   const handAllDone = st.allDone && !Object.keys(leaving).length;
 
   return (
-    <div className={`game ${phase === 'night' ? 'night' : ''}`}>
+    <div className={`game ${phase === 'night' ? 'night' : ''} ${st.minimum ? 'soft' : ''}`}>
       <WorldView
         ref={world}
         phase={phase}
@@ -247,10 +244,12 @@ export default function App() {
         species={state.buddy}
         wear={wear}
         missions={missions}
+        minimum={st.minimum}
         label={t('world.label')}
         onTapMission={(id) => play(id, null)}
         onTapCompanion={() => say(t(`say.tap.${Math.floor(Math.random() * 5)}`), 1500)}
       />
+      <div className="soft-veil" aria-hidden="true" />
 
       <Hud
         ref={ringRef}
@@ -258,12 +257,11 @@ export default function App() {
         {...header}
         level={shownLevel}
         ping={ping}
-        chain={st.current}
-        frozen={yesterdayFrozen && !todayActive}
+        month={st.month}
         stage={st.stage.id}
         stageLabel={t(`stage.${st.stage.id}`)}
         onSettings={() => setSheet('settings')}
-        onChain={() => setSheet('week')}
+        onMonth={() => setSheet('week')}
         onGrowth={() => setSheet('garden')}
       />
 
@@ -280,11 +278,14 @@ export default function App() {
         leaving={leaving}
         allDone={handAllDone}
         bonus={ALL_DONE_BONUS}
+        xp={xpEach}
+        minimum={st.minimum}
+        onMinimum={toggleMinimum}
         onPlay={play}
         onRemove={remove}
         onAdd={() => setSheet('add')}
         onShowDone={() => setSheet('played')}
-        doneCard={<DoneCard ref={doneRef} t={t} praise={praise} bonus={ALL_DONE_BONUS} streak={st.current} species={state.buddy} />}
+        doneCard={<DoneCard ref={doneRef} t={t} praise={praise} bonus={ALL_DONE_BONUS} month={st.month} species={state.buddy} />}
       />
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
@@ -292,7 +293,7 @@ export default function App() {
       {sheet === 'week' && (
         <Sheet title={t('week.title')} onClose={close} t={t}>
           <div className="mb-4">
-            <WeekCard t={t} state={state} today={today} locale={locale} chainText={chainText} freezeAvailable={st.freezeAvailable} />
+            <WeekCard t={t} state={state} today={today} locale={locale} st={st} />
           </div>
           <figure className="card m-0 mb-4 px-4 py-3.5">
             <figcaption className="eyebrow mb-1">{t('quote.title')}</figcaption>
@@ -303,11 +304,11 @@ export default function App() {
       {sheet === 'garden' && (
         <Sheet title={t('stats.title')} onClose={close} t={t}>
           <div className="mb-4">
-            <GardenPanel t={t} st={st} open setOpen={() => {}} />
+            <GardenPanel t={t} st={st} />
           </div>
         </Sheet>
       )}
-      {sheet === 'played' && <PlayedSheet t={t} items={doneItems} onUndo={undo} onClose={close} />}
+      {sheet === 'played' && <PlayedSheet t={t} items={doneItems} minimum={st.minimum} onUndo={undo} onClose={close} />}
       {sheet === 'add' && <AddSheet t={t} onAdd={add} onClose={close} />}
       {sheet === 'settings' && (
         <SettingsSheet
