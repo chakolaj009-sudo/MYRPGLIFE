@@ -316,3 +316,46 @@ describe('growth appears overnight and never wilts', () => {
     expect(M.worldGrowth(s, '2026-09-28')['r-teeth'].visible).toBe(1);
   });
 });
+
+describe('weekly reflection', () => {
+  // Week of Mon 2026-09-14 … Sun 2026-09-20
+  function week() {
+    let s = M.createState();
+    s.routines.push({ id: 'r-walk', title: 'Walk', mini: 'Step outside', icon: 'walk' });
+    const plan = { '2026-09-14': ['r-walk', 'r-read'], '2026-09-15': ['r-walk'], '2026-09-17': ['r-walk', 'r-teeth'], '2026-09-19': ['r-walk'] };
+    for (const k of ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18', '2026-09-19']) {
+      s = M.prepareDay(s, k).state;
+      if (k === '2026-09-17') s = M.setMinimum(s, k, true);
+      for (const id of plan[k] || []) s = M.toggleItem(s, k, id);
+    }
+    return s;
+  }
+  it('is offered once, on the first open of the next week', () => {
+    const s = week();
+    expect(M.pendingReflection(s, '2026-09-19')).toBe(null); // the week isn't over yet
+    expect(M.pendingReflection(s, '2026-09-21')).toBe('2026-09-14');
+    const r = M.recordReflection(s, '2026-09-14', 'Mornings', '2026-09-21');
+    expect(M.pendingReflection(r, '2026-09-22')).toBe(null);
+    expect(M.pendingReflection(M.recordReflection(s, '2026-09-14', null, '2026-09-21'), '2026-09-21')).toBe(null); // skipped counts as seen
+  });
+  it('is not offered for a week without showing up', () => {
+    expect(M.pendingReflection(week(), '2026-09-28')).toBe(null);
+  });
+  it('tells a pattern, one real moment and what changed', () => {
+    const story = M.weekStory(week(), '2026-09-14');
+    expect(story.pattern.item.id).toBe('r-walk');
+    expect(story.pattern.count).toBe(4);
+    expect(story.moment).toMatchObject({ type: 'minimum', date: '2026-09-17' });
+    expect(story.change).toMatchObject({ type: 'growth', tier: 2 });
+    expect(story.change.item.id).toBe('r-walk');
+  });
+  it('quotes past answers back only occasionally and only when older than 2 weeks', () => {
+    const s = M.recordReflection(week(), '2026-09-14', 'Mornings', '2026-09-21');
+    const days = Array.from({ length: 30 }, (_, i) => D.addDays('2026-09-21', i));
+    const hits = days.map((k) => M.pastAnswer(s, k)).filter(Boolean);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.length).toBeLessThan(10);
+    expect(days.filter((k) => D.diffDays('2026-09-14', k) < 14).every((k) => M.pastAnswer(s, k) === null)).toBe(true);
+    expect(hits[0].answer).toBe('Mornings');
+  });
+});

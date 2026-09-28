@@ -4,8 +4,8 @@ import { useStore } from './lib/useStore.js';
 import { detectLang, itemTitle, makeT, QUOTES, safeLocale } from './lib/i18n.js';
 import { dayNumber, keyToLocalDate } from './domain/dates.js';
 import {
-  addCustom, ALL_DONE_BONUS, discoveries, levelFromXp, markGrown, markSeen, newlyUnlocked, removeItem, setLang, setMinimum, setProfile, setRoutines, stats,
-  toggleItem, WARDROBE, worldGrowth, xpPerTask,
+  addCustom, ALL_DONE_BONUS, discoveries, levelFromXp, markGrown, markSeen, newlyUnlocked, pastAnswer, pendingReflection, recordReflection, removeItem,
+  setLang, setMinimum, setProfile, setRoutines, stats, toggleItem, WARDROBE, weekStory, worldGrowth, xpPerTask,
 } from './domain/model.js';
 import { flyXp, floatText, prefersReducedMotion, sparkleBurst, haptic } from './lib/fx.js';
 import { phaseFor } from './lib/ambient.js';
@@ -16,6 +16,7 @@ import Hud from './components/Hud.jsx';
 import CardHand from './components/CardHand.jsx';
 import { DoneCard, GardenPanel, SettingsSheet, Toasts, WeekCard } from './components/Panels.jsx';
 import { AddSheet, PlayedSheet, Sheet } from './components/Sheets.jsx';
+import Reflection from './components/Reflection.jsx';
 
 const EMPTY_DAY = { items: [], done: [] };
 const LEAVE_MS = 650;
@@ -219,7 +220,27 @@ export default function App() {
   const quote = quotes[((n % quotes.length) + quotes.length) % quotes.length];
   const latest = useRef({});
   latest.current = { state, today, st };
+
+  // Once a week the companion tells the story of the week that just ended.
+  // It comes first; the usual opening lines follow when it closes.
+  const [reflectWeek, setReflectWeek] = useState(() => pendingReflection(state, today));
+  const [openingFor, setOpeningFor] = useState(null);
   useEffect(() => {
+    const w = pendingReflection(latest.current.state, today);
+    setReflectWeek(w);
+    if (!w) setOpeningFor(today);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today]);
+  const story = useMemo(() => (reflectWeek ? weekStory(state, reflectWeek) : null), [reflectWeek]); // eslint-disable-line react-hooks/exhaustive-deps
+  const closeReflection = (answer) => {
+    const w = reflectWeek;
+    commit((s, k) => recordReflection(s, w, answer, k));
+    setReflectWeek(null);
+    setOpeningFor(today);
+  };
+
+  useEffect(() => {
+    if (openingFor !== today) return;
     setRevealed(false);
     const timers = [];
     const at = (ms, fn) => timers.push(setTimeout(fn, ms));
@@ -235,15 +256,20 @@ export default function App() {
         world.current?.focus(found[0]);
         say(found.length > 1 ? t('grow.foundMany') : t('grow.found', { habit: itemTitle(t, item) }), 3400);
         commit((x, kk) => markGrown(x, kk));
-        at(3800, () => !s0.comeback && say(t('bubble.quote', { q: quote }), 5200));
+        at(3800, () => !s0.comeback && say(closing(), 5200));
       } else {
         commit((x, kk) => markGrown(x, kk));
-        if (!s0.comeback) say(t('bubble.quote', { q: quote }), 5200);
+        if (!s0.comeback) say(closing(), 5200);
       }
     });
     return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [today]);
+  }, [openingFor, today]);
+  // Now and then a past reflection answer is gently quoted back instead of the thought of the day.
+  const closing = () => {
+    const past = pastAnswer(latest.current.state, latest.current.today);
+    return past ? t('recall', { n: past.weeksAgo, answer: past.answer }) : t('bubble.quote', { q: quote });
+  };
 
   // ---------------------------------------------------------------- service worker updates
   useEffect(() => {
@@ -319,6 +345,8 @@ export default function App() {
       />
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
+
+      {story && <Reflection t={t} story={story} locale={locale} species={state.buddy} onDone={closeReflection} />}
 
       {sheet === 'week' && (
         <Sheet title={t('week.title')} onClose={close} t={t}>

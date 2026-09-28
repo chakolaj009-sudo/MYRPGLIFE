@@ -29,7 +29,7 @@
 // There are no streaks: missing a day never erases anything. Continuity is
 // measured as "days you showed up" (this month, and in total).
 
-import { addDays, diffDays, isValidKey, weekStart, weekDays } from './dates.js';
+import { addDays, dayNumber, diffDays, isValidKey, weekStart, weekDays } from './dates.js';
 
 export const SCHEMA_VERSION = 2;
 export const STORAGE_KEY = 'myday.state';
@@ -420,6 +420,97 @@ export function markGrown(state, today) {
     }
   }
   return changed ? { ...state, grown } : state;
+}
+
+// ---------------------------------------------------------------------------
+// Weekly reflection: once a week, three plain lines about the week that just
+// ended (a pattern, one real moment, what changed) and one question.
+
+const itemIn = (state, id, fromKey, toKey) => {
+  for (const [k, d] of Object.entries(state.days)) {
+    if (k < fromKey || k > toKey) continue;
+    const it = d.items.find((i) => i.id === id);
+    if (it) return it;
+  }
+  return null;
+};
+
+/** The week (Monday key) whose story should be told now, or null. */
+export function pendingReflection(state, today) {
+  const week = addDays(weekStart(today), -7);
+  if (state.reflections[week]) return null;
+  const days = weekDays(week);
+  if (!days.some((k) => isActive(state.days[k]))) return null;
+  return week;
+}
+
+export function weekStory(state, week) {
+  const days = weekDays(week);
+  const end = days[6];
+  const counts = {};
+  for (const k of days) {
+    const d = state.days[k];
+    if (!d) continue;
+    const ids = new Set(d.items.map((i) => i.id));
+    for (const id of d.done) if (ids.has(id)) counts[id] = (counts[id] || 0) + 1;
+  }
+  const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1] || (a[0].startsWith('r-') ? -1 : 1));
+  const pattern = ranked.length ? { item: itemIn(state, ranked[0][0], week, end), count: ranked[0][1] } : null;
+
+  let moment = null;
+  for (const k of days) {
+    const d = state.days[k];
+    if (d && d.minimum && isActive(d)) {
+      moment = { type: 'minimum', date: k, item: d.items.find((i) => i.id === d.done.find((id) => d.items.some((x) => x.id === id))) };
+      break;
+    }
+  }
+  if (!moment) {
+    const full = days.find((k) => isAllDone(state.days[k]));
+    if (full) moment = { type: 'full', date: full };
+  }
+  if (!moment) {
+    const first = days.find((k) => isActive(state.days[k]));
+    if (first) {
+      const d = state.days[first];
+      moment = { type: 'showed', date: first, item: d.items.find((i) => i.id === d.done.find((id) => d.items.some((x) => x.id === id))) };
+    }
+  }
+
+  // What changed: a habit whose growth tier rose during the week (revealed by next Monday).
+  const before = habitCounts(state, week);
+  const after = habitCounts(state, addDays(end, 1));
+  let change = null;
+  for (const [id, n] of Object.entries(after)) {
+    const t0 = growthTier(before[id] || 0);
+    const t1 = growthTier(n);
+    if (t1 > t0) {
+      const item = itemIn(state, id, week, end);
+      if (item && (!change || t1 > change.tier)) change = { type: 'growth', item, tier: t1 };
+    }
+  }
+  if (!change) {
+    const total = (b) => Object.values(b).reduce((x, y) => x + y, 0);
+    const s0 = stageFor(total(before));
+    const s1 = stageFor(total(after));
+    if (s1.index > s0.index) change = { type: 'stage', stage: s1.id };
+  }
+  return { week, pattern, moment, change: change || { type: 'quiet' } };
+}
+
+export function recordReflection(state, week, answer, today) {
+  return { ...state, reflections: { ...state.reflections, [week]: { answer: cleanTitle(answer), on: today } } };
+}
+
+/** Now and then, gently quote a past answer back (2+ weeks old). */
+export function pastAnswer(state, today) {
+  if (((dayNumber(today) % 4) + 4) % 4 !== 0) return null;
+  const old = Object.entries(state.reflections)
+    .filter(([week, r]) => r.answer && diffDays(week, today) >= 14)
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  if (!old.length) return null;
+  const [week, r] = old[Math.floor(dayNumber(today) / 4) % old.length];
+  return { answer: r.answer, weeksAgo: Math.floor(diffDays(addDays(week, 7), today) / 7) || 1 };
 }
 
 // ---------------------------------------------------------------------------

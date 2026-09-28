@@ -277,6 +277,34 @@ await check('growth appears overnight: planted today, discovered next open', asy
   assert(!(await p2.getByText(/something new grew/).count()), 'discovery is shown only once');
 });
 
+await check('weekly reflection: once a week, three lines, one-tap answer, then the day', async (page, ctx) => {
+  await page.clock.install({ time: new Date('2026-09-22T09:00:00+03:00') }); // Tue
+  await page.goto(URL);
+  await settle(page, 1500);
+  await cards(page).first().click();
+  await settle(page, 2500);
+  await page.close();
+  const p2 = await ctx.newPage();
+  await p2.clock.install({ time: new Date('2026-09-28T09:00:00+03:00') }); // next Monday
+  await p2.goto(URL);
+  await p2.getByRole('dialog', { name: 'Your week' }).waitFor({ timeout: 8000 });
+  await p2.clock.runFor(5000);
+  const lines = await p2.locator('.reflect-line').allInnerTexts();
+  assert(lines.length === 3, `expected 3 lines, got ${lines.length}`);
+  assert(/once this week/.test(lines[0]) && /^On Tuesday/.test(lines[1]), `lines: ${lines.join(' / ')}`);
+  await p2.getByRole('radio', { name: 'Mornings' }).click();
+  await p2.getByRole('button', { name: 'Keep going' }).click();
+  await p2.clock.runFor(2000);
+  await settle(p2, 500);
+  assert(!(await p2.getByRole('dialog', { name: 'Your week' }).count()), 'reflection should close');
+  const s = await state(p2);
+  assert(s.reflections['2026-09-21']?.answer === 'Mornings', 'answer not saved');
+  await p2.reload();
+  await settle(p2, 2000);
+  assert(!(await p2.getByRole('dialog', { name: 'Your week' }).count()), 'shown only once a week');
+  assert((await cards(p2).count()) >= 1, 'the day continues normally');
+});
+
 await check('imports legacy Life RPG data and keeps the old keys', async (page) => {
   await page.addInitScript(() => {
     if (!localStorage.getItem('arch_record_v1'))
@@ -361,11 +389,18 @@ await check('Luma appears after showing up on 7 days', async (page) => {
   await page.goto(URL + '?debug');
   await settle(page, 1500);
   for (let i = 0; i < 7; i++) {
+    // Crossing into a new week brings the weekly story first; skip it here.
+    const skip = page.getByRole('button', { name: 'Not now' });
+    if (await skip.count()) {
+      await page.clock.runFor(5000);
+      await skip.click();
+      await settle(page, 300);
+    }
     await cards(page).first().click();
     await settle(page, 600);
     await page.clock.fastForward('24:00:00');
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await settle(page, 300);
+    await settle(page, 400);
   }
   assert((await state(page)).seen.includes('buddy-luma'), 'luma unlock not recorded');
   await page.getByRole('button', { name: 'Settings and routines' }).click();
