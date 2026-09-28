@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useRef, useState } from 'react';
 import { Lock, Plus, Star, Trash2 } from 'lucide-react';
-import { weekDays, keyToLocalDate, dayNumber, weekStart } from '../domain/dates.js';
+import { weekDays, keyToLocalDate, dayNumber, weekStart, mondayIndex } from '../domain/dates.js';
 import { doneCount, isAllDone, MAX_TITLE, STAGES } from '../domain/model.js';
 import { itemTitle } from '../lib/i18n.js';
 import { CompanionArt } from './Companion.jsx';
@@ -31,7 +31,7 @@ export function WeekCard({ t, state, today, locale, st }) {
           <h2 id="week-h" className="eyebrow">
             {t('week.title')}
           </h2>
-          <p className="mt-1 text-[17px] font-extrabold tracking-[-0.02em]">{t('week.showed', { n: st.week })}</p>
+          <p className="mt-1 text-[17px] font-extrabold tracking-[-0.02em]">{st.week ? t('week.showed', { n: st.week }) : mondayIndex(today) === 0 ? t('week.fresh') : t('week.quiet')}</p>
         </div>
         <div className="flex max-w-[50%] items-center gap-1.5 text-end">
           <span className="text-xs font-semibold leading-tight text-ink2">

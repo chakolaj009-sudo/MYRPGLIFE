@@ -85,10 +85,10 @@ const LevelRing = forwardRef(function LevelRing({ t, level, ping }, ref) {
   );
 });
 
-const Hud = forwardRef(function Hud({ t, hello, title, level, ping, month, stage, stageLabel, onSettings, onMonth, onGrowth }, ringRef) {
+const Hud = forwardRef(function Hud({ t, hello, title, level, ping, month, stage, stageLabel, onSettings, onMonth, onGrowth, boxRef }, ringRef) {
   const days = month === 0 ? t('chip.begin') : month === 1 ? t('chip.days1') : t('chip.days', { n: month });
   return (
-    <header className="hud">
+    <header ref={boxRef} className="hud">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <p className="hud-hello">{hello}</p>

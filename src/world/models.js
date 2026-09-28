@@ -20,6 +20,7 @@ export function mat(color, o = {}) {
         side: o.side || THREE.FrontSide,
       }),
     );
+    matCache.get(key).userData.cached = true; // shared: never disposed per object
   }
   return matCache.get(key);
 }

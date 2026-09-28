@@ -89,6 +89,8 @@ const en = {
 
   'week.title': 'This week',
   'week.showed': 'Showed up {n} of 7 days',
+  'week.fresh': 'A fresh week',
+  'week.quiet': 'A quiet week so far',
   'week.totals': '{m} days this month · {a} in total',
   'week.all': 'All done',
   'week.reached': '{place} reached!',
@@ -281,6 +283,8 @@ const he = {
 
   'week.title': 'השבוע',
   'week.showed': 'הופעת {n} מתוך 7 ימים',
+  'week.fresh': 'שבוע חדש',
+  'week.quiet': 'שבוע שקט עד כה',
   'week.totals': '{m} ימים החודש · {a} בסך הכול',
   'week.all': 'הכול הושלם',
   'week.reached': 'הגעת אל {place}!',

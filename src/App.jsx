@@ -17,6 +17,7 @@ import CardHand from './components/CardHand.jsx';
 import { DoneCard, GardenPanel, SettingsSheet, Toasts, WeekCard } from './components/Panels.jsx';
 import { AddSheet, PlayedSheet, Sheet } from './components/Sheets.jsx';
 import Reflection from './components/Reflection.jsx';
+import SpeechBubble from './components/SpeechBubble.jsx';
 
 const EMPTY_DAY = { items: [], done: [] };
 const LEAVE_MS = 650;
@@ -77,6 +78,7 @@ export default function App() {
   const dismiss = (id) => setToasts((l) => l.filter((y) => y.id !== id));
 
   const world = useRef(null);
+  const hudRef = useRef(null);
   const [bubble, setBubble] = useState(null);
   const bubbleTimer = useRef(0);
   const say = useCallback((text, ms = 2600) => {
@@ -330,6 +332,7 @@ export default function App() {
 
       <Hud
         ref={ringRef}
+        boxRef={hudRef}
         t={t}
         {...header}
         level={shownLevel}
@@ -342,11 +345,7 @@ export default function App() {
         onGrowth={() => setSheet('garden')}
       />
 
-      {bubble && (
-        <div key={bubble.id} className="world-bubble" style={{ left: bubble.x, top: bubble.y }} role="status">
-          {bubble.text}
-        </div>
-      )}
+      {bubble && <SpeechBubble key={bubble.id} x={bubble.x} y={bubble.y} text={bubble.text} hudRef={hudRef} />}
 
       <CardHand
         t={t}

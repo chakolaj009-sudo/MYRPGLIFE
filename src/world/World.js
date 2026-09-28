@@ -149,11 +149,11 @@ export class World {
     this.phase = phase;
     this._applyLight();
 
-    if (this.island) this.spin.remove(this.island);
+    if (this.island) this._drop(this.island);
     this.island = buildIsland(phase);
     this.spin.add(this.island);
 
-    this.backdrop.clear();
+    for (const b of [...this.backdrop.children]) this._drop(b);
     const night = phase === 'night';
     const cloudColor = night ? '#6C73AE' : phase === 'evening' ? '#FFE4EC' : '#FFFFFF';
     [
@@ -224,7 +224,7 @@ export class World {
     if (stage === this.stage) return;
     const grow = this.stage !== null;
     this.stage = stage;
-    if (this.tree) this.spin.remove(this.tree);
+    if (this.tree) this._drop(this.tree);
     this.tree = buildGrowthTree(stage);
     this.tree.position.set(-0.4, 0, -2.2);
     this.tree.scale.setScalar(1.25);
@@ -242,7 +242,7 @@ export class World {
     const changed = this.species !== null && species !== this.species;
     this.species = species;
     this.wearKey = key;
-    if (this.companion) this.spin.remove(this.companion);
+    if (this.companion) this._drop(this.companion);
     this.companion = buildCompanion(species, wear);
     this.companion.scale.setScalar(COMPANION_SCALE);
     this.companion.position.copy(this.comp.pos);
@@ -263,14 +263,14 @@ export class World {
     const ids = new Set(items.map((i) => i.id));
     for (const [id, o] of this.objects) {
       if (!ids.has(id)) {
-        this.spin.remove(o.group);
+        this._drop(o.group);
         this.objects.delete(id);
       }
     }
     items.forEach((it, i) => {
       let o = this.objects.get(it.id);
       if (!o || o.kind !== it.kind) {
-        if (o) this.spin.remove(o.group);
+        if (o) this._drop(o.group);
         o = this._makeObject(it);
         this.objects.set(it.id, o);
         this.spin.add(o.group);
@@ -301,7 +301,7 @@ export class World {
     const ids = new Set(list.map((k) => k.id));
     for (const [id, m] of this.pebbles) {
       if (!ids.has(id)) {
-        this.spin.remove(m);
+        this._drop(m);
         this.pebbles.delete(id);
       }
     }
@@ -320,7 +320,7 @@ export class World {
       this.pebbles.set(k.id, m);
       if (this._keepReady && !this.reduced) {
         m.scale.setScalar(0.01);
-        setTimeout(() => this._tween(900, (kk) => m.scale.setScalar(Math.max(0.01, this._elastic(kk)))), 900);
+        setTimeout(() => m.parent && this._tween(900, (kk) => m.scale.setScalar(Math.max(0.01, this._elastic(kk)))), 900);
       }
     });
     this._keepReady = true;
@@ -470,6 +470,12 @@ export class World {
 
   dispose() {
     this.running = false;
+    for (const p of this.particles) this.scene.remove(p);
+    this.particles = [];
+    this.tweens = [];
+    this._drop(this.float);
+    this._drop(this.backdrop);
+    this._pgeo?.dispose();
     this.resizeObserver.disconnect();
     document.removeEventListener('visibilitychange', this._onVis);
     this.renderer.dispose();
@@ -477,6 +483,17 @@ export class World {
   }
 
   // ---------------------------------------------------------------- internals
+  /** Free GPU resources of a subtree we no longer show (shared cached materials are kept). */
+  _drop(obj) {
+    if (!obj) return;
+    obj.parent?.remove(obj);
+    obj.traverse((m) => {
+      if (m.geometry && m.geometry !== this._pgeo) m.geometry.dispose();
+      const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
+      for (const x of mats) if (!x.userData.cached) x.dispose();
+    });
+  }
+
   _makeObject(it) {
     const group = new THREE.Group();
     group.userData.pick = it.id;
@@ -521,7 +538,7 @@ export class World {
     if (tier === o.tier) return;
     const from = o.tier;
     o.tier = tier;
-    o.growth.clear();
+    for (const c of [...o.growth.children]) this._drop(c);
     const g = buildGrowth(o.kind, tier);
     const fresh = [];
     for (const piece of [...g.children]) {
@@ -531,7 +548,7 @@ export class World {
     if (!this._ready || this.reduced || from < 0 || !fresh.length) return;
     fresh.forEach((p, i) => {
       p.scale.setScalar(0.01);
-      setTimeout(() => this._tween(800, (k) => p.scale.setScalar(Math.max(0.01, this._elastic(k)))), i * 180);
+      setTimeout(() => p.parent && this._tween(800, (k) => p.scale.setScalar(Math.max(0.01, this._elastic(k)))), i * 180);
     });
     const at = o.group.position.clone();
     at.y += 0.6;
