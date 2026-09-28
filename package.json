@@ -9,6 +9,7 @@
     "preview": "vite preview --port 4173",
     "test": "vitest run",
     "e2e": "node scripts/e2e.mjs",
+    "soak": "node scripts/soak.mjs",
     "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {

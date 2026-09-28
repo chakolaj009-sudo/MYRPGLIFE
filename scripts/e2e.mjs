@@ -11,6 +11,7 @@ const TZ = 'Asia/Jerusalem';
 
 // Run vite directly (not via npx) so killing the process really frees the port.
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'pipe' });
+process.on('exit', () => server.kill()); // never leave the port busy, even after a crash
 await new Promise((res, rej) => {
   server.stdout.on('data', (d) => String(d).includes(String(PORT)) && res());
   server.on('exit', () => rej(new Error('preview server exited')));
